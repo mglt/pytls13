@@ -1,0 +1,13 @@
+{
+  'handshake_secret' = ""
+  'master_secret' = "", 
+  'client_application_traffic_secret_0_transcript_hash' = "fa 68 00 16 9a 6b aa c1 91 59 52 4f a7 b9 72 1b 41 be 3c 9d b6 f3 f9 3f a5 ff 7e 3d b3 ec e2 04 d2 b4 56 c5 10 46 e4 0e c5 31 2c 55 a8 61 26 f5", 
+  'client_application_traffic_secret_0_secret'
+  'client_application_traffic_secret_0_secret_write_key'
+  'client_application_traffic_secret_0_secret_write_iv'
+  'server_application_traffic_secret_0_transcript_hash' = "fa 68 00 16 9a 6b aa c1 91 59 52 4f a7 b9 72 1b 41 be 3c 9d b6 f3 f9 3f a5 ff 7e 3d b3 ec e2 04 d2 b4 56 c5 10 46 e4 0e c5 31 2c 55 a8 61 26 f5", 
+  'server_application_traffic_secret_0_secret'
+  'server_application_traffic_secret_0_secret_write_key'
+  'server_application_traffic_secret_0_secret_write_iv'
+  
+}

@@ -1,0 +1,190 @@
+import socket 
+import binascii
+
+import pylurk.lurk.lurk_lurk
+import pylurk.conf 
+import pylurk.cs 
+import pylurk.tls13.struct_tls13
+
+import sys
+sys.path.insert(0, './../../src/')
+import pytls13.struct_tls13
+import pytls13.tls_client
+
+""" This scripts details the case where a TLS client performs a TLS handshake with:
+* Certificate base authentication (EC)DHE
+* Generates the (EC)DHE private key itself
+* Does not supports post_handshake authentication, nor session resumption
+
+Such interaction only involves a c_init_client_finished between the TLS Engine (E) and the CS
+"""
+
+
+clt_e_conf = {
+  'server' : {
+    'ip' : '127.0.0.1',
+    'port' : 1799
+  }, 
+  ( 'tls13', 'v1' ) : {
+    'ecdhe_authentication' : True, ## ecdhe indicates certificate based authentication
+    'ke_modes' : [ ], ## psk without ecdhe
+    'session_resumption' : False,
+    'post_handshake_authentication' : False,  ## True/False
+    ## sig scheme understood by the TLS Engine to authenticate the Server
+    ## These values are considered by the TLS server to ensure the TLS 
+    ## client will be able to validate the server certificate
+    ## these are NOT reflecting the sig_scheme supported by the CS, 
+    ## which indicates the signature scheme used by the CS.
+    'signature_algorithms' : [ 'rsa_pkcs1_sha256', 'rsa_pkcs1_sha384', 'rsa_pkcs1_sha512', 'ecdsa_secp256r1_sha256', 'ecdsa_secp384r1_sha384', 'ecdsa_secp521r1_sha512', 'rsa_pss_rsae_sha256', 'rsa_pss_rsae_sha384', 'rsa_pss_pss_sha256', 'rsa_pss_pss_sha384', 'rsa_pss_pss_sha256', 'ed25519', 'ed448', 'rsa_pkcs1_sha1' ], 
+    ## configuration of ecdhe requires some synchronization with the cs 
+    ## configuration.
+    ## maybe this may be generated from the CS configuration (or the reverse)
+    'ephemeral_method' : 'e_generated', ## when ECDHE is needed. 
+    ## these values are used for the supported_group (non mandatory) and key_share extension 
+    'supported_groups' : [ 'x25519' ], #[ 'secp256r1', 'x25519', 'x448' ], 
+  }
+}
+
+
+## configuration of the CS for 'Ed25519'
+sig_scheme = 'ed25519'
+clt_cs_conf = pylurk.conf.Configuration( )
+clt_cs_conf.set_ecdhe_authentication( sig_scheme, conf_dir = './clt_cs' )
+clt_cs_conf.set_role( 'client' )
+clt_cs_conf.set_extention( ext=( 'tls13', 'v1' ) )
+
+
+print( f"::Instantiating the CS" )
+cs = pylurk.cs.CryptoService( conf=clt_cs_conf.conf )
+
+print( f"::TCP session with the TLS server")
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.connect( ( clt_e_conf[ 'server' ][ 'ip' ], clt_e_conf[ 'server' ][ 'port' ] ) )
+
+print( f"::Sending ClientHello to the server\n--->" )
+ch = pytls13.tls_client.ClientHello( clt_e_conf[ ( 'tls13', 'v1' ) ] )
+clt_ecdhe_private = ch.ecdhe_private_key_list[ 0 ]
+ch.show() 
+s.sendall( ch.to_bytes( ) )
+
+print( f"::Receiving ServerHello from the server\n--->" )
+
+
+#msg_list = pytls13.struct_tls13.TLSPlaintextRange.parse( s.recv( 1024 ) ) 
+
+##recv_bytes = s.recv( 4096 )
+##print( f" -- recv_bytes ( {len( recv_bytes ) } ) : {  binascii.hexlify( recv_bytes )}" )
+##server_hello_len = int.from_bytes( recv_bytes[ 3 : 5 ], "big" ) + 5
+##while server_hello_len > len( recv_bytes ) :
+##  recv_bytes = s.recv( 4096 )
+##server_hello_bytes = recv_bytes[ : server_hello_len ]
+##recv_bytes = recv_bytes[ server_hello_len : ]
+##print( f" -- server_hello_bytes ( {len( server_hello_bytes ) } / remainder {len(recv_bytes )}") 
+##print( f" -- server_hello_bytes : {binascii.hexlify( server_hello_bytes ) }") 
+##
+##server_hello = pytls13.struct_tls13.TLSPlaintext.parse( server_hello_bytes ) 
+##print( f" -- server_hello ({len(server_hello) }) : {server_hello}" )
+
+tls_msg = pytls13.tls_client.TLSMsg()
+tls_msg.bytes = s.recv( 4096 )
+print( f"-- tls_msg.parse_msg_type(): {tls_msg.parse_msg_type()}") 
+if tls_msg.parse_msg_type() == 'server_hello':
+  server_hello = tls_msg.parse_single_msg( s )
+else: 
+  raise ValueError( "expecting server hello" )
+if tls_msg.parse_content_type()  == 'change_cipher_spec' :
+  change_cipher_spec = tls_msg.parse_single_msg( s )
+else:
+  raise ValueError( "expecting change_cipher_spec" )
+
+echde = clt_ecdhe_private * server_public_key
+tls_hash = has from cipher suite
+
+ks = pylurk.tls13.lurk_tls13.KeyScheduler(tls_hash=tls_hash, ecdhe=ecdhe)
+handshake = pylurk.tls13.lurk_tls13.TlsHandshake( 'client' )
+handshake.msg_list.extend( [ client_hello, server_hello])
+ks.process( [ 'h_s', 'h_c' ], handshake )
+
+while next_msg.parse_content_type == 'application_data' : 
+  ## the msg is ciphertext instead of a plaintext
+  additional_data = tls_msg.bytes[ : 5 ]
+  encrypted_reccord = tls_msg.parse_single_msg( s )
+  ## encrypted record is an encrypted tls_inner_plain_text
+  if server_hello[ 'cipher_suite' ] == 'TLS_CHACHA20_POLY1305_SHA256' :
+    cipher_s = pytls13.ciphers.TLS_CHACHA20_POLY1305_SHA256( ks.secrets[ 'h_s' ] )
+  inner_plain_text_bytes = cipher_s.decrypt(encrypted_reccord, additional_data ) 
+  inner_plain_text = pytls13.TLSInnerPlaintext.parse( inner_plain_text_bytes )
+
+  next_msg = tls_msg.parse_msg_type()
+else:
+  raise ValueError( "expecting server hello" )
+
+
+
+##  msg_len += int( recv_bytes[msg_len + 3: msg_len + 4] )
+##   
+##  recv_bytes += s.recv( 4096 )
+##  print( f" ++ {len( chunk ) } : {chunk}" )
+##  msg_list = pytls13.struct_tls13.TLSPlaintext.parse( chunk ) 
+##  print( f" ++ {len( chunk ) } : {msg_list}" )
+##  if not chunk: break
+##  resp += chunk 
+##print( f" (bytes)")
+##msg_list = pytls13.struct_tls13.TLSPlaintextRange.parse( data ) 
+##print( f"msg_list: {msg_list}" )
+
+#server_key_share = ExtKeyShare( e_conf )
+#srv_ecdhe_public = server_key_share.ecdhe_public_key_list[ 0 ]
+#sh.add_ext( ExtKeyShare( e_conf ) )
+print( f"::Receiving ServerHello\n<---" )
+#sh.show() 
+
+print( f"::Generting handshake secrets/keys ")  
+ecdhe_shared_secret = pylurk.tls13.lurk_tls13.Ephemeral().compute_share_secret( clt_ecdhe_private, srv_ecdhe_public, 'x25519' )
+
+print( f"::Receiving EncryptedExtension, CertificateRequest, Certificate, CertificateVerify, Finished\n<---" )
+ee = EncryptedExtensions( )
+ee.show()
+cr = CertificateRequest()
+cr_ctx = cr.msg[ 'data' ][ 'certificate_request_context' ] 
+cr.show()
+srv_cert = Certificate( certificate_entry_list=srv_cs_conf.conf[ ( 'tls13', 'v1' ) ][ '_cert_entry_list' ] )
+cv = CertificateVerify()
+srv_f = Finished() 
+
+print( f":: === Requesting the CS signature ===" )
+c_init_client_finished_req = {\
+  'tag' : { 'last_exchange' : True },
+  'handshake' : [ ch, sh, ee, cr, cv ], 
+  'server_certificate' : { 'cert_type' : 'uncompressed',\
+                           'certificate' : srv_cert[ 'data' ] },
+  'client_certificate' : { 'cert_type' : 'finger_print', \
+                           'certificate' : { 
+                             'certificate_request_context' : cr_ctx,
+                             'certificate' : self.conf[ ( 'tls13', 'v1' ) ] [ '_finger_print_entry_list' ] } },
+  'freshness' : 'sha256',
+  'ephemeral' : { 'method': 'e_generated', 'key': ecdhe_shared_secret },
+  'psk' : b'' }
+
+lurk_c_init_client_finished_req = \
+  { 'designation' : 'tls13',
+    'version' : 'v1',
+    'type' : 'c_init_client_hello',
+    'status' : 'request',
+    'id' : randbelow( 2  ** 64 ),
+    'payload' : c_init_client_finished_req}
+
+bytes_req = LURKMessage.build( lurk_c_init_client_finished_req )
+print( f"{LURKMessage.parse( bytes_req )}\n--->" )
+bytes_resp = cs.serve( LURKMessage.build( lurk_c_init_client_finished_req ) )
+print( f"{LURKMessage.parse( bytes_resp )}\n<---" )
+resp = LURKMessage.parse( bytes_resp )
+
+
+print( f"::Sending remainig Certificate, CertificateVerify and server Finished to the server\n--->" )
+clt_cert = Certificate( certificate_entry_list=srv_cs_conf.conf[ ( 'tls13', 'v1' ) ][ '_cert_entry_list' ] )
+clt_cert.show() 
+cv = CertificateVerify( algorithm='ed25519', signature=resp[ 'payload' ][ 'signature' ])
+cv.show()
+clt_f = Finished() 
+clt_f.show()
