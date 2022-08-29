@@ -1,0 +1,13 @@
+__pycache__/
+archive/
+docs/_build
+docs/_static
+docs/templates
+# C extensions
+*.so
+*.swp
+*.py[cod]
+*.swo
+*.swn
+*.der
+*.log

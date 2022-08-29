@@ -36,8 +36,21 @@ clt_e_conf = {
     'ip' : '127.0.0.1',
     'port' : 8400
   },
-  ( 'tls13', 'v1' ) : {
-    'illustrated_tls13': True,
+  'debug' : {
+    'trace' : True,  # prints multiple useful information
+    'test_vector' : True,
+    'test_vector_file' : './illustrated_tls13.json',
+    ## in some cases, the test vector is performed by establishing a real 
+    ## TCP connection. In such cases, sent packets are __effectively__ 
+    ## being sent to the other peer and incoming packets are __effectively__ 
+    ## being received by the other peer.  If that is the case, than 'remote'
+    ## should be picked. 
+    ## In other cases, packets are not sent and received, but instead locally
+    ## provided from a file. 
+    'test_vector_mode' : 'remote', #'local' # / remote 
+  }, 
+  'tls13' : {
+#    'illustrated_tls13': True,
     'trace_mode': True,
     'ecdhe_authentication' : True, ## ecdhe indicates certificate based authentication
     'ke_modes' : [ ], ## psk without ecdhe
@@ -66,24 +79,26 @@ clt_cs_conf.set_ecdhe_authentication( sig_scheme, conf_dir = './clt_cs' )
 clt_cs_conf.set_role( 'client' )
 clt_cs_conf.set_extention( ext=( 'tls13', 'v1' ) )
 
-lurk_req =\
-  { 'designation' : 'tls13',
-    'version' : 'v1',
-    'type' : 'c_init_client_hello',
-    'status' : 'request',
-    'id' : secrets.randbelow( 2  ** 64 ), ## MUST be int 
-    'payload' : {} }
-
-secret_request = { 'b' : False, 'e_s' : False, 'e_x' : False, \
-                   'h_c' : False, 'h_s' : False, 'a_c' : False, \
-                   'a_s' : False, 'x' : False, 'r' : False }
+#lurk_req =\
+#  { 'designation' : 'tls13',
+#    'version' : 'v1',
+#    'type' : 'c_init_client_hello',
+#    'status' : 'request',
+#    'id' : secrets.randbelow( 2  ** 64 ), ## MUST be int 
+#    'payload' : {} }
+#
+#secret_request = { 'b' : False, 'e_s' : False, 'e_x' : False, \
+#                   'h_c' : False, 'h_s' : False, 'a_c' : False, \
+#                   'a_s' : False, 'x' : False, 'r' : False }
 
 print( f"::Instantiating the CS" )
 cs = pylurk.cs.CryptoService( conf=clt_cs_conf.conf )
 print( f"::Instantiating the Lurk client" )
 lurk_client = pylurk.lurk_client.LurkTls13Client( cs )
-if clt_e_conf[ ( 'tls13', 'v1' ) ][ 'illustrated_tls13' ] is True:
-  lurk_client.freshness = 'null'
+#if clt_e_conf[ ( 'tls13', 'v1' ) ][ 'illustrated_tls13' ] is True:
+if clt_e_conf[ 'debug' ][ 'test_vector' ] is True:
+  if 'illustrated_tls13.json' in clt_e_conf[ 'debug' ][ 'test_vector_file' ]:  
+    lurk_client.freshness = 'null'
 
 ## tls handshake enables msg manipulations 
 ## ks is a useful lcompagnon but toinstantiate it one needs to know the TLS.Hash
@@ -98,49 +113,13 @@ s.connect( ( clt_e_conf[ 'server' ][ 'ip' ], clt_e_conf[ 'server' ][ 'port' ] ) 
 
 
 print( f"::Sending ClientHello to the server\n--->" )
-ch = pytls13.tls_client.ClientHello( clt_e_conf[ ( 'tls13', 'v1' ) ] )
+ch = pytls13.tls_client.ClientHello( clt_e_conf )
 print( f"--- E: Generating ClientHello:" )
-if clt_e_conf[ ( 'tls13', 'v1' ) ][ 'ephemeral_method' ] == 'e_generated' :
+if clt_e_conf[ 'tls13' ][ 'ephemeral_method' ] == 'e_generated' :
   clt_ecdhe_private = ch.ecdhe_private_key_list[ 0 ]
 #  ch.show() 
-elif clt_e_conf[ ( 'tls13', 'v1' ) ][ 'ephemeral_method' ] == 'cs_generated' :
-#lurk_c#  if clt_e_conf[ ( 'tls13', 'v1' ) ][ 'illustrated_tls13' ] is True:
-#lurk_c#    freshness = 'null'
-#lurk_c#  else: 
-#lurk_c#    freshness = 'sha256'
-#lurk_c#  lurk_req [ 'type' ] = 'c_init_client_hello'
-#lurk_c#  lurk_client_session_id = secrets.token_bytes( 4 )
-#lurk_c#  lurk_req [ 'payload' ] = { \
-#lurk_c#    'session_id' : lurk_client_session_id,
-#lurk_c#    'handshake' : [ ch.msg ],
-#lurk_c#    'freshness' : freshness,
-#lurk_c#    'psk_metadata_list' : [], ## no psk
-#lurk_c#    'secret_request' : secret_request 
-#lurk_c#  }
-#lurk_c#  print( "--- E -> CS: Sending 'c_init_client_hello' Request:" )
-#lurk_c#  print( f"  - {LURKMessage.parse( LURKMessage.build( lurk_req ) )}" )
-#lurk_c#  lurk_resp = LURKMessage.parse( cs.serve( LURKMessage.build( lurk_req ) ) )
-#lurk_c#  if lurk_resp[ 'status' ] != 'success':
-#lurk_c#    raise ValueError( f"Lurk exchange error: {lurk_resp}" )
-#lurk_c#  print( "--- E <- CS: Receiving 'c_init_client_hello' Response:" )
-#lurk_c#  print( f"  - {LURKMessage.parse( LURKMessage.build( lurk_resp ) )}" )
-#lurk_c#  ## updating the session_id (sending)
-#lurk_c#  cs_session_id = lurk_resp[ 'payload' ][ 'session_id' ]
-
-  ## create a tls_handshake 
-  ## move the entire generation of teh ClientHello to the ClientHello object.
+elif clt_e_conf[ 'tls13' ][ 'ephemeral_method' ] == 'cs_generated' :
   lurk_resp = lurk_client.resp( 'c_init_client_hello', handshake=[ ch.msg ] )
-  ## preparing the Client Hello to be sent to the TLS server
-    ## random
-#  tls_handshake = pylurk.tls13.lurk_tls13.TlsHandshake( 'client' )
-#ooo  tls_handshake.msg_list = [ ch.msg ]
-#  tls_handshake.update_random( pylurk.tls13.lurk_tls13.Freshness( lurk_req[ 'payload' ][ 'freshness' ] ) )
-#ooo  tls_handshake.update_random( pylurk.tls13.lurk_tls13.Freshness( lurk_client.freshness ) )
-    ## keyshare
-#ooo  ephemeral_list = lurk_resp[ 'payload' ][ 'ephemeral_list' ] 
-#ooo  client_shares = [ eph[ 'key' ] for eph in ephemeral_list ]
-#ooo  tls_handshake.update_key_share( client_shares )
-#ooo  ch.msg = tls_handshake.msg_list[ 0 ] 
   print( f" --- before: {tls_handshake.msg_list}" )
   ch.c_init_client_hello_update( lurk_resp, tls_handshake, lurk_client )
 
@@ -148,7 +127,7 @@ elif clt_e_conf[ ( 'tls13', 'v1' ) ][ 'ephemeral_method' ] == 'cs_generated' :
 s.sendall( ch.to_bytes( ) )
 
 
-##if clt_e_conf[ ( 'tls13', 'v1' ) ][ 'illustrated_tls13' ] is True:
+##if clt_e_conf[ 'tls13' ][ 'illustrated_tls13' ] is True:
 ##  if ch.to_bytes() != pylurk.utils.str_to_bytes( ch.illustrated_tls13_ch ):
 ##    raise ValueError( "ClientHello byte mismatch" )
 
@@ -156,19 +135,27 @@ s.sendall( ch.to_bytes( ) )
 print( "--- E -> TLS Server Sending Client Hello:" )
 ch.show()
 
-tls_msg = pytls13.tls_client.TLSMsg()
+#tls_msg = pytls13.tls_client.TLSMsg()
+stream_parser = pytls13.tls_client.TLSByteStreamParser( s )
 while True:
-  msg = tls_msg.parse_single_msg( s )
-  if msg[ 'type' ] == 'handshake': 
-    if msg[ 'fragment' ] [ 'msg_type' ] == 'server_hello' :
+#  msg = tls_msg.parse_single_msg( s )
+  tls_msg = stream_parser.parse_single_msg( )
+#  if msg[ 'type' ] == 'handshake': 
+  if tls_msg.content_type == 'handshake': 
+#    if msg[ 'fragment' ] [ 'msg_type' ] == 'server_hello' :
+    if tls_msg.msg[ 'msg_type' ] == 'server_hello' : 
       print( "---Receiving ServerHello from the server\n--->" )
-      print( f"  - (msg bytes) [len {len( msg)}] : msg" )
-      print( f"  - (inner struct) ch.from_bytes( ch.to_bytes() )" )
-#      sh = msg[ 'fragment' ]
+#      print( f"  - (msg bytes) [len {len( msg)}] : msg" )
+#      print( f"  - (inner struct) ch.from_bytes( ch.to_bytes() )" )
+      print( f"  - (msg bytes) [len {len(tls_msg.bytes)}] : tls_msg.msg" )
+      print( f"  - (inner struct) tls_msg.from_bytes( tls_msg.to_bytes() )" )
+##      sh = msg[ 'fragment' ]
       sh = pytls13.tls_client.ServerHello()
-      sh.msg = msg[ 'fragment' ]
+#      sh.msg = msg[ 'fragment' ]
+      sh.msg = tls_msg.msg
+      sh.bytes = tls_msg.bytes
       tls_handshake.msg_list.append( sh.msg )
-      ephemeral_method = clt_e_conf[ ( 'tls13', 'v1' ) ][ 'ephemeral_method' ]
+      ephemeral_method = clt_e_conf[ 'tls13' ][ 'ephemeral_method' ]
       if ephemeral_method == 'e_generated' :
         if tls_handshake.is_ks_agreed is True: ## shared_secret agreed
           ## compute shared secrets
@@ -194,30 +181,10 @@ while True:
       elif ephemeral_method == 'no_secret' :
         pass
       else: 
-        eph_method = clt_e_conf[ ( 'tls13', 'v1' ) ][ 'ephemeral_method' ]
+        eph_method = clt_e_conf[ 'tls13' ][ 'ephemeral_method' ]
         raise ValueError( "unknown 'ephemeral_method': {eph_method}" )
-###      lurk_req[ 'id' ] = secrets.randbelow( 2  ** 64 )
-###      lurk_req [ 'type' ] = 'c_server_hello'
-###      lurk_req[ 'payload' ] = {\
-####        'session_id' : cs_session_id,
-###        'session_id' : lurk_client.cs_session_id,
-###        'handshake' : [ sh ],
-###        'ephemeral' : eph }
-###      print( "--- E -> CS: Sending 'c_server_hello' Request:" )
-###      print( "  - {LURKMessage.parse( LURKMessage.build( lurk_req ) )}" )
-###      lurk_resp_bytes = cs.serve( LURKMessage.build( lurk_req ) )
-###      lurk_resp = LURKMessage.parse( lurk_resp_bytes )
-###      print( "--- E <- CS: Receiving 'c_server_hello' Response:" )
-###      print( f"  - {LURKMessage.parse( LURKMessage.build( lurk_resp ) )}" )
-###      if lurk_resp[ 'status' ] != 'success': 
-###        raise ValueError( f"Lurk exchange error: {lurk_resp}" )
       lurk_resp = lurk_client.resp( 'c_server_hello', handshake=[ sh.msg ], ephemeral=eph )
       ks = pylurk.tls13.lurk_tls13.KeyScheduler( tls_hash=tls_handshake.get_tls_hash() )
-#      for secret in lurk_resp[ 'payload' ][ 'secret_list' ] : 
-#        if secret[ 'secret_type' ] == 'h_s' :
-#          h_s = secret[ 'secret_data' ]    
-#        if secret[ 'secret_type' ] == 'h_c' :
-#          h_c = secret[ 'secret_data' ]   
       ## update ks with secrets and perform handshake transcript
       sh.c_server_hello_update( lurk_resp, tls_handshake, ks )
     ## generating cipher objects to encrypt / decrypt traffic
@@ -234,77 +201,76 @@ while True:
     ## to avoid such copy of handshake message, we may send the request of 
     ## the cs prior to validate the server finished.
     tmp_handshake = []
-  elif msg[ 'type' ] == 'change_cipher_spec':
+  elif tls_msg.content_type == 'change_cipher_spec':
+#  elif msg[ 'type' ] == 'change_cipher_spec':
     print( f"--- E <- TLS Server: Receiving ChangeCipherSpec from the server\n--->" )
     pass
-  elif msg[ 'type' ] == 'application_data' :
+#  elif msg[ 'type' ] == 'application_data' :
+  elif tls_msg.content_type == 'application_data' :
     print( f"--- E <- TLS Server: Receiving Application Data from the server\n--->" )
-    print( f"  - (msg bytes) [len {len( msg)}] : {msg}" )
+    print( f"  - (msg bytes) [len {len( tls_msg.bytes)}] : {tls_msg.msg}" )
     
-#    try :
-    inner_clear_text = s_cipher.decrypt( msg )
-    inner_content = inner_clear_text[ 'content' ]
-    inner_type = inner_clear_text[ 'type' ]
-    print( f"  - (struct) [len {len( msg[ 'fragment' ])}] : {inner_content}" )
+##    try :
+##    inner_clear_text = s_cipher.decrypt( msg )
+    inner_tls_msg = pytls13.tls_client.TLSMsg()
+    inner_clear_text = s_cipher.decrypt( tls_msg.msg )
+#    inner_content = inner_clear_text[ 'content' ]
+#    inner_type = inner_clear_text[ 'type' ]
+#    inner_tls_msg.content_type = inner_clear_text[ 'type' ]
+#    inner_tls_msg.msg = inner_clear_text[ 'content' ]
+    inner_tls_msg.from_record_layer_struct( inner_clear_text )
+    ## bytes is not populated --> may be decrypt coudl do that.
+
+#    print( f"  - (struct) [len {len( msg[ 'fragment' ])}] : {inner_content}" )
+##    print( f"  - (struct) [len {len( msg[ 'fragment' ])}] : {inner_content}" )
    
-#    except:
-#      selected_cipher = sh[ 'data' ][ 'cipher_suite' ]
-#      s_cipher = pylurk.conf.CipherSuite( selected_cipher, h_s )
-#      pylurk.utils.print_bin( "server_write_key", s_cipher.write_key ) 
-#      pylurk.utils.print_bin( "server_write_iv", s_cipher.write_iv ) 
-##      clear_text_msg = s_cipher.decrypt( msg )
-#    print( f"{clear_text_msg}" )
-    if inner_type == 'handshake' :
-      if inner_content[ 'msg_type' ] == 'certificate_verify':
+#    if inner_type == 'handshake' :
+    if inner_tls_msg.content_type == 'handshake' :
+#      if inner_content[ 'msg_type' ] == 'certificate_verify':
+      if inner_tls_msg.msg[ 'msg_type' ] == 'certificate_verify':
         ## we do update the transcript similarly to the server
         ## but also keep track of the handshake that we will need 
         ## to provide to the cs.  
-#        tmp_handshake = tls_handshake.msg_list[ : ]
         tls_handshake.transcript_hash( 'sig' )
-#        pass
-      elif inner_content[ 'msg_type' ] == 'finished':
+#      elif inner_content[ 'msg_type' ] == 'finished':
+      elif inner_tls_msg.msg[ 'msg_type' ] == 'finished':
         c_verify_data = tls_handshake.get_verify_data( ks, role='server',\
                           transcript_mode='finished') 
-#        s_verify_data =  clear_text_inner_content [ 'data' ][ 'verify_data' ]
-        s_verify_data =  inner_content [ 'data' ][ 'verify_data' ]
+##        s_verify_data =  inner_content [ 'data' ][ 'verify_data' ]
+        s_verify_data =  inner_tls_msg.msg[ 'data' ][ 'verify_data' ]
         pylurk.utils.print_bin( "client computed verify_data", c_verify_data )
-#        finished_key = s_cipher.hkdf_expand_label( secret=ks.secrets[ 'h_s' ],\
-#          label=b'finished', context=b'', length=s_cipher.hash.digest_size )
-#        hmac = HMAC( finished_key, s_cipher.hash )
-#        hmac.update( tls_handshake.transcript_hash( 'finished' ) )
         pylurk.utils.print_bin( "server provided verify_data", s_verify_data )
         if c_verify_data != s_verify_data : 
           raise ValueError( "Client unable to validate Finished message" )
-        tls_handshake.msg_list.append( inner_content )
-        tmp_handshake.append( inner_content )
+#        tls_handshake.msg_list.append( inner_content )
+#        tmp_handshake.append( inner_content )
+        tls_handshake.msg_list.append( inner_tls_msg.msg )
+        tmp_handshake.append( inner_tls_msg.msg )
         break
       else:
         pass
-      tls_handshake.msg_list.append( inner_content )
-      tmp_handshake.append( inner_content )
+#      tls_handshake.msg_list.append( inner_content )
+#      tmp_handshake.append( inner_content )
+      tls_handshake.msg_list.append( inner_tls_msg.msg )
+      tmp_handshake.append( inner_tls_msg.msg )
       
     else :
       pass
-#print( f" --DEBUG: {type(tmp_handshake)} -- {type(tmp_handshake[0][ 'msg_type' ])}" )
-#for m in tmp_handshake:
-#  try:
-#    print( f" {m[ 'msg_type' ]}" )
-#  except: 
-#    print( f"{m}" )
-#print( f"  -- DEBUG 1: tmp_handshake: { [ m[ 'msg_type' ] for m in tmp_handshake ] }" )
     
-if clt_e_conf[ ( 'tls13', 'v1' ) ][ 'illustrated_tls13' ] is True:
-  print( "--- E -> TLS Server : Change Cipher Spec" )
-  tls_msg.msg=b'\x01'
+if clt_e_conf[ 'debug' ][ 'test_vector' ] is True:
+  if 'illustrated_tls13.json' in clt_e_conf[ 'debug' ][ 'test_vector_file' ]:  
+#if clt_e_conf[ 'tls13' ][ 'illustrated_tls13' ] is True:
+    print( "--- E -> TLS Server : Change Cipher Spec" )
+    tls_msg.msg=b'\x01'
   #tls_msg.msg=c_cipher.encrypt( clear_text_msg=b'\x01', content_type='change_cipher_spec' )
-  tls_msg.content_type = 'change_cipher_spec'
-  tls_msg.show()
-  s.sendall( tls_msg.to_bytes( ) )
+    tls_msg.content_type = 'change_cipher_spec'
+    tls_msg.show()
+    s.sendall( tls_msg.to_bytes( ) )
   
 
 print( "--- E -> CS: Application Secrets / Signature" )
 
-if clt_e_conf[ ( 'tls13', 'v1' ) ][ 'session_resumption' ] is False:
+if clt_e_conf[ 'tls13' ][ 'session_resumption' ] is False:
   last_exchange = True
 else :
   last_exchange = False
@@ -335,16 +301,8 @@ for secret in lurk_resp[ 'payload' ][ 'secret_list' ] :
 
 print( "--- E -> TLS Server: Sending Client Finished" )
 
-#verify_data = tls_handshake.get_verify_data( ks, role='server',\
-#                        transcript_mode = 'r') 
 tls_handshake.update_finished( ks )
-#cf = tls_handshake.msg_list[ - 1 ]
-#print( cf )
-#tls_msg.msg = tls_handshake.msg_list[ - 1 ]
-#tls_msg.content_type = 'handshake'
-#tls_msg.show()
-#tls_msg.msg = tls_handshake.msg_list[ - 1 ]
-#print( f"client_finished : {tls_msg.msg}" )
+
 tls_msg.msg=c_cipher.encrypt( tls_handshake.msg_list[ - 1 ], content_type='handshake' )
 tls_msg.content_type = 'application_data'
 tls_msg.show()
@@ -362,111 +320,40 @@ s.sendall( tls_msg.to_bytes( ) )
 ticket_list = []
 
 #tls_msg.__init__() ## re-initializing tls_msg to receive bytes and parse
-tls_msg = pytls13.tls_client.TLSMsg()
+#tls_msg = pytls13.tls_client.TLSMsg()
 while True:
-  msg = tls_msg.parse_single_msg( s )
-  if msg[ 'type' ] == 'application_data' :
+#  msg = tls_msg.parse_single_msg( s )
+  tls_msg = stream_parser.parse_single_msg( )
+#  if msg[ 'type' ] == 'application_data' :
+  if tls_msg.content_type == 'application_data' :
     print( f"--- E <- TLS Server: Receiving Application Data from the server\n--->" )
-    print( f"  - (msg bytes) [len {len( msg)}] : {msg}" )
+    print( f"  - (msg bytes) [len {len( tls_msg.bytes)}] : {tls_msg.msg}" )
 #    clear_text_inner_content = s_a_cipher.decrypt( msg )
-    inner_clear_text = s_a_cipher.decrypt( msg )
-    inner_content = inner_clear_text[ 'content' ]
-    inner_type = inner_clear_text[ 'type' ]
-    print( f"  - (struct) [len {len( msg[ 'fragment' ])}] : {inner_content}" )
+    inner_tls_msg = pytls13.tls_client.TLSMsg()
+    inner_clear_text = s_a_cipher.decrypt( tls_msg.msg )
+    inner_tls_msg.from_record_layer_struct( inner_clear_text )
+#    inner_tls_msg.msg = inner_clear_text[ 'content' ]
+#    inner_tls_msg.content_type = inner_clear_text[ 'type' ]
+#    inner_clear_text = s_a_cipher.decrypt( msg )
+#    inner_content = inner_clear_text[ 'content' ]
+#    inner_type = inner_clear_text[ 'type' ]
+#    print( f"  - (struct) [len {len( msg[ 'fragment' ])}] : {inner_content}" )
+    print( f"  - (struct) [len {len( tls_msg.bytes)}] : {inner_tls_msg.msg}" )
     print( f"--- E <- TLS Server: Receiving Application Data from the server\n--->" )
-    print( f"  - (msg bytes) [len {len( msg)}] : {msg}" )
-    if inner_type == 'application_data':
-      print( f"--- APPLICATION DATA: {inner_content}" )
-    elif inner_type == 'handshake':
-      if inner_content[ 'msg_type' ] == 'new_session_ticket':
+    print( f"  - (msg bytes) [len {len(inner_tls_msg.bytes)}] : {inner_tls_msg.bytes}" )
+#    if inner_type == 'application_data':
+    if inner_tls_msg.content_type == 'application_data':
+      print( f"--- APPLICATION DATA: {inner_tls_msg.msg}" )
+#    elif inner_type == 'handshake':
+    elif inner_tls_msg.content_type == 'handshake':
+#      if inner_content[ 'msg_type' ] == 'new_session_ticket':
+      if inner_tls_msg.msg[ 'msg_type' ] == 'new_session_ticket':
         lurk_resp = lurk_client.resp( 'c_register_tickets', \
                               last_exchange=True, \
-                              ticket_list=[ inner_content[ 'data' ] ] )
+                              ticket_list=[ inner_tls_msg.msg[ 'data' ] ] )
+#                              ticket_list=[ inner_content[ 'data' ] ] )
         
       pass
   else:
     pass
 
-##
-##
-##
-##
-##secret_request[ 'a_c' ] = True
-##secret_request[ 'a_s' ] = True
-##
-##lurk_req[ 'id' ] = secrets.randbelow( 2  ** 64 )
-##lurk_req [ 'type' ] = 'c_client_finished'
-##lurk_req[ 'payload' ] = {\
-##  'tag' : { 'last_exchange' : last_exchange },
-##  'session_id' : cs_session_id,
-##  'handshake' : handshake,
-##  'server_certificate' : server_cert,  
-##  'client_certificate' : client_cert, 
-##  'secret_request' : secret_request }  
-##print( "--- E -> CS: Sending 'c_server_hello' Request:" )
-##print( "  - {LURKMessage.parse( LURKMessage.build( lurk_req ) )}" )
-##lurk_resp_bytes = cs.serve( LURKMessage.build( lurk_req ) )
-##lurk_resp = LURKMessage.parse( lurk_resp_bytes )
-##print( "--- E <- CS: Receiving 'c_server_hello' Response:" )
-##print( f"  - {LURKMessage.parse( LURKMessage.build( lurk_resp ) )}" )
-##if lurk_resp[ 'status' ] != 'success': 
-##  raise ValueError( f"Lurk exchange error: {lurk_resp}" )
-##for secret in lurk_resp[ 'payload' ][ 'secret_list' ] : 
-##  if secret[ 'secret_type' ] == 'a_s' :
-##    a_s = secret[ 'secret_data' ]    
-##  if secret[ 'secret_type' ] == 'a_c' :
-##    a_c = secret[ 'secret_data' ]    
-##
-##
-##
-##print( f"::Receiving ServerHello\n<---" )
-##
-##print( f"::Generting handshake secrets/keys ")  
-##ecdhe_shared_secret = pylurk.tls13.lurk_tls13.Ephemeral().compute_share_secret( clt_ecdhe_private, srv_ecdhe_public, 'x25519' )
-##
-##print( f"::Receiving EncryptedExtension, CertificateRequest, Certificate, CertificateVerify, Finished\n<---" )
-##ee = EncryptedExtensions( )
-##ee.show()
-##cr = CertificateRequest()
-##cr_ctx = cr.msg[ 'data' ][ 'certificate_request_context' ] 
-##cr.show()
-##srv_cert = Certificate( certificate_entry_list=srv_cs_conf.conf[ ( 'tls13', 'v1' ) ][ '_cert_entry_list' ] )
-##cv = CertificateVerify()
-##srv_f = Finished() 
-##
-##print( f":: === Requesting the CS signature ===" )
-##c_init_client_finished_req = {\
-##  'tag' : { 'last_exchange' : True },
-##  'handshake' : [ ch, sh, ee, cr, cv ], 
-##  'server_certificate' : { 'cert_type' : 'uncompressed',\
-##                           'certificate' : srv_cert[ 'data' ] },
-##  'client_certificate' : { 'cert_type' : 'finger_print', \
-##                           'certificate' : { 
-##                             'certificate_request_context' : cr_ctx,
-##                             'certificate' : self.conf[ ( 'tls13', 'v1' ) ] [ '_finger_print_entry_list' ] } },
-##  'freshness' : 'sha256',
-##  'ephemeral' : { 'method': 'e_generated', 'key': ecdhe_shared_secret },
-##  'psk' : b'' }
-##
-##lurk_c_init_client_finished_req = \
-##  { 'designation' : 'tls13',
-##    'version' : 'v1',
-##    'type' : 'c_init_client_hello',
-##    'status' : 'request',
-##    'id' : randbelow( 2  ** 64 ),
-##    'payload' : c_init_client_finished_req}
-##
-##bytes_req = LURKMessage.build( lurk_c_init_client_finished_req )
-##print( f"{LURKMessage.parse( bytes_req )}\n--->" )
-##bytes_resp = cs.serve( LURKMessage.build( lurk_c_init_client_finished_req ) )
-##print( f"{LURKMessage.parse( bytes_resp )}\n<---" )
-##resp = LURKMessage.parse( bytes_resp )
-##
-##
-##print( f"::Sending remainig Certificate, CertificateVerify and server Finished to the server\n--->" )
-##clt_cert = Certificate( certificate_entry_list=srv_cs_conf.conf[ ( 'tls13', 'v1' ) ][ '_cert_entry_list' ] )
-##clt_cert.show() 
-##cv = CertificateVerify( algorithm='ed25519', signature=resp[ 'payload' ][ 'signature' ])
-##cv.show()
-##clt_f = Finished() 
-##clt_f.show()

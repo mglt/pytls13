@@ -4,6 +4,8 @@
 import secrets 
 import pprint
 import binascii
+import pickle
+import json
 
 from cryptography.hazmat.primitives.hashes import Hash, SHA256
 from cryptography.hazmat.primitives.asymmetric import ec
@@ -41,47 +43,77 @@ class TLSMsg:
   ## msg can be left or changed to fragment.
   def __init__( self, ):
     self.content_type = None #'handshake' ## the type of 
-    self.msg_type = None # 'client_hello' ## handshake type when 
+#    self.msg_type = None # 'client_hello' ## handshake type when 
     self.msg = {}        ## the clear text msg or application data
     self.bytes = b''     ## TLS reccord in bytes 
     self.legacy_record_version = b'\x03\x03'
 
-  def to_bytes( self, content_type=None, msg=None ):
-    """ return a byte format TLS Reccord 
-    
-    The inner packet ( self.msg ) is wrapped into the TLS Reccord.
-    """ 
+## bytes = record_layer_bytes
+## msg = content
+## to_bytes = to_record_layer_bytes
+## from record_layer_bytes
+
+  def to_record_layer_struct( self, content_type=None, msg=None  ):
     if content_type is None:
       content_type = self.content_type
     if msg is None :
       msg = self.msg
 #    return pylurk.tls13.struct_tls13.Handshake.build( self.msg ) 
-    tls_plain_text = { 'type' : content_type,
-                       'legacy_record_version' : b'\x03\x03',
-                       'fragment' : msg }
+    return { 'type' : content_type,
+             'legacy_record_version' : self.legacy_record_version,
+             'fragment' : msg }
+    
+  def to_bytes( self, content_type=None, msg=None ):
+    """ return a byte format TLS Reccord 
+    
+    The inner packet ( self.msg ) is wrapped into the TLS Reccord.
+    """ 
 #    print( f"TLS PlainText: {tls_plain_text}\n" )
 #    return pytls13.struct_tls13.TLSPlaintext.build( tls_plain_text ) 
-    return tls.TLSPlaintext.build( tls_plain_text ) 
+    return tls.TLSPlaintext.build( self.to_record_layer_struct( content_type=content_type, msg=msg  ) ) 
 
+  def from_record_layer_struct( self, tls_plain_text ):
+    self.content_type = tls_plain_text[ 'type' ]
+    if 'legacy_record_version' in tls_plain_text.keys(): 
+      self.legacy_record_version = tls_plain_text[ 'legacy_record_version' ]
+    if 'fragment' in tls_plain_text.keys():
+      self.msg = tls_plain_text[ 'fragment' ]
+    else: 
+      self.msg = tls_plain_text[ 'content' ]
+      
   def from_bytes( self, byte_string):
     """ Extract the inner message from a TLS Record in bytes"""
     tls_plain_text = tls.TLSPlaintext.parse( byte_string )
-    if self.content_type!= None:
-      if tls_plain_text[ 'type' ] !=  self.content_type :
-        raise ValueError( f"unexpected content_type. Expecting {self.content_type}, got {tls_plain_text[ 'type' ]}" )
-      if self.content_type == 'handshake' and self.msg_type != None: 
-        if tls_plain_text[ 'fragment' ][ 'msg_type' ] != self.msg_type: 
-          raise ValueError( f"unexpected msg_type. Expecting {self.msg_type}, got {tls_plain_text[ 'fragment' ][ 'msg_type' ]}" )
+#    if self.content_type!= None:
+#     if tls_plain_text[ 'type' ] !=  self.content_type :
+#        raise ValueError( f"unexpected content_type. Expecting {self.content_type}, got {tls_plain_text[ 'type' ]}" )
+#      if self.content_type == 'handshake' and self.msg_type != None: 
+#        if tls_plain_text[ 'fragment' ][ 'msg_type' ] != self.msg_type: 
+#          raise ValueError( f"unexpected msg_type. Expecting {self.msg_type}, got {tls_plain_text[ 'fragment' ][ 'msg_type' ]}" )
     self.content_type = tls_plain_text[ 'type' ]
     self.legacy_record_version = tls_plain_text[ 'legacy_record_version' ]
     self.msg = tls_plain_text[ 'fragment' ]
-    
+    self.bytes = byte_string
+
+ 
+
+  def from_test_vector( self, test_vector_file, key ):
+    print( f" --- test_vector: {test_vector_file}" )
+    print( f" --- key: {key}" )
+    with open( test_vector_file, 'rt', encoding='utf8' ) as f:
+      test_vector = json.load( f )
+    self.from_bytes( pylurk.utils.str_to_bytes( test_vector[ key ] ) )
+
+
   def show( self, content_type=None, msg=None ):
     self.bytes = self.to_bytes( content_type=content_type, msg=msg )
     pylurk.utils.print_bin( "", self.bytes ) 
 #    pprint.pprint( f"  - (bytes) [len {len( self.bytes )}] {binascii.hexlify( self.bytes, sep=' ' )}" )
     print ( f"  - (struct) : {tls.TLSPlaintext.parse( self.bytes )}" )
   
+  def add_ext( self, ext_list ) :
+    for ext in ext_list:
+      self.msg[ 'data' ][ 'extensions' ].append( ext.msg )
 
 #  def parse_record_layer_type( self):
 #    """ returns the reccord layer Content Type
@@ -90,10 +122,16 @@ class TLSMsg:
 #    """
 #    return pytls13.struct_tls13.ContentType.parse( ( self.bytes[ 0 ] ).to_bytes(1, byteorder='big') )
 
+class TLSByteStreamParser:
+
+  def __init__( self, socket ) :
+    self.byte_stream = b''
+    self.socket = socket
+
   def parse_record_layer_length( self) : 
     """ returns the recoord layer length from bytes """
 #    print( f" - reccord layer_length: {int.from_bytes( self.bytes[ 3 : 5 ] , byteorder='big') }" )
-    return int.from_bytes( self.bytes[ 3 : 5 ] , byteorder="big") + 5
+    return int.from_bytes( self.byte_stream[ 3 : 5 ] , byteorder="big") + 5
 
 #  def parse_handshake_type( self ):
 #    """ return the message type 
@@ -110,20 +148,21 @@ class TLSMsg:
 #      return pytls13.struct_tls13.HandshakeType.parse( ( self.bytes[ 5 ] ).to_bytes(1, byteorder='big') )
 
 
-  def parse_single_msg( self, socket )-> dict:
+  def parse_single_msg( self )-> dict:
     """ parse the message and return the inner fragment (of the TLS plain_text) and remaining bytes 
     """
-    if len( self.bytes ) == 0:
-      self.bytes = socket.recv( 4096 )
-    while self.parse_record_layer_length() > len( self.bytes ) :
-      self.bytes += socket.recv( 4096 )
-    msg = tls.TLSPlaintext.parse( self.bytes[ : self.parse_record_layer_length() ] )
-    self.bytes = self.bytes[ self.parse_record_layer_length() : ]
-    return msg  
+    if len( self.byte_stream ) == 0:
+      self.byte_stream = self.socket.recv( 4096 )
+    while self.parse_record_layer_length() > len( self.byte_stream ) :
+      self.byte_stream += self.socket.recv( 4096 )
+    record_layer = self.byte_stream[ : self.parse_record_layer_length() ]
+#    msg = tls.TLSPlaintext.parse( record_layer )
+    tls_msg = TLSMsg()
+    tls_msg.from_bytes( record_layer )
+    self.byte_stream = self.byte_stream[ self.parse_record_layer_length() : ]
+#    return msg  
+    return tls_msg
 
-  def add_ext( self, ext_list ) :
-    for ext in ext_list:
-      self.msg[ 'data' ][ 'extensions' ].append( ext.msg )
 
 
 class ClientHello( TLSMsg ):
@@ -132,8 +171,11 @@ class ClientHello( TLSMsg ):
     self.conf = tls_client_conf
     self.content_type = 'handshake' 
     self.msg_type = 'client_hello'
-    if self.conf[ 'illustrated_tls13'] is True:
-      self.illustrated_tls13( )
+    if self.conf[ 'debug' ][ 'test_vector' ] is True:
+      self.from_test_vector( )
+#  def from_test_vector( self, test_vector_file, key='client_hello' ):
+#    if self.conf[ 'illustrated_tls13'] is True:
+#      self.illustrated_tls13( )
     else:
       self.msg = {\
         'msg_type': self.msg_type, \
@@ -144,14 +186,27 @@ class ClientHello( TLSMsg ):
           'cipher_suites' : ['TLS_AES_128_GCM_SHA256', 'TLS_CHACHA20_POLY1305_SHA256'],
           'legacy_compression_methods' : b'\x00',
           'extensions' : [ ] } }
-
+      
       self.ecdhe_private_key_list = None
       self.default_ext( )
+    self.bytes = b''
 
-  def illustrated_tls13( self ):
-    ## Note that we update TLS version of the Header record to TLS 1.2 whil eth eoriginal is TLS 1.0.
-    self.illustrated_tls13_ch = "16 03 03 00 f8 01 00 00 f4 03 03 00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f 10 11 12 13 14 15 16 17 18 19 1a 1b 1c 1d 1e 1f 20 e0 e1 e2 e3 e4 e5 e6 e7 e8 e9 ea eb ec ed ee ef f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 fa fb fc fd fe ff 00 08 13 02 13 03 13 01 00 ff 01 00 00 a3 00 00 00 18 00 16 00 00 13 65 78 61 6d 70 6c 65 2e 75 6c 66 68 65 69 6d 2e 6e 65 74 00 0b 00 04 03 00 01 02 00 0a 00 16 00 14 00 1d 00 17 00 1e 00 19 00 18 01 00 01 01 01 02 01 03 01 04 00 23 00 00 00 16 00 00 00 17 00 00 00 0d 00 1e 00 1c 04 03 05 03 06 03 08 07 08 08 08 09 08 0a 08 0b 08 04 08 05 08 06 04 01 05 01 06 01 00 2b 00 03 02 03 04 00 2d 00 02 01 01 00 33 00 26 00 24 00 1d 00 20 35 80 72 d6 36 58 80 d1 ae ea 32 9a df 91 21 38 38 51 ed 21 a2 8e 3b 75 e9 65 d0 d2 cd 16 62 54"
-    self.from_bytes( pylurk.utils.str_to_bytes( self.illustrated_tls13_ch ) )
+#  def illustrated_tls13( self ):
+#    ## Note that we update TLS version of the Header record to TLS 1.2 whil eth eoriginal is TLS 1.0.
+#    self.illustrated_tls13_ch = "16 03 03 00 f8 01 00 00 f4 03 03 00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f 10 11 12 13 14 15 16 17 18 19 1a 1b 1c 1d 1e 1f 20 e0 e1 e2 e3 e4 e5 e6 e7 e8 e9 ea eb ec ed ee ef f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 fa fb fc fd fe ff 00 08 13 02 13 03 13 01 00 ff 01 00 00 a3 00 00 00 18 00 16 00 00 13 65 78 61 6d 70 6c 65 2e 75 6c 66 68 65 69 6d 2e 6e 65 74 00 0b 00 04 03 00 01 02 00 0a 00 16 00 14 00 1d 00 17 00 1e 00 19 00 18 01 00 01 01 01 02 01 03 01 04 00 23 00 00 00 16 00 00 00 17 00 00 00 0d 00 1e 00 1c 04 03 05 03 06 03 08 07 08 08 08 09 08 0a 08 0b 08 04 08 05 08 06 04 01 05 01 06 01 00 2b 00 03 02 03 04 00 2d 00 02 01 01 00 33 00 26 00 24 00 1d 00 20 35 80 72 d6 36 58 80 d1 ae ea 32 9a df 91 21 38 38 51 ed 21 a2 8e 3b 75 e9 65 d0 d2 cd 16 62 54"
+#    self.from_bytes( pylurk.utils.str_to_bytes( self.illustrated_tls13_ch ) )
+#    key_share_index = 0
+#    for e in self.msg[ 'data' ][ 'extensions' ]:
+#      if e[ 'extension_type' ] == 'key_share':
+#        break
+#      else:
+#        key_share_index += 1
+#    self.msg[ 'data' ][ 'extensions' ][ key_share_index ][ 'extension_data' ][ 'client_shares' ][ 0 ][ 'key_exchange' ] = b''
+
+  def from_test_vector( self, test_vector_file=None, key='client_hello' ):
+    if test_vector_file is None: 
+      test_vector_file = self.conf[ 'debug' ][ 'test_vector_file' ]
+    super().from_test_vector( test_vector_file, 'client_hello' )
     key_share_index = 0
     for e in self.msg[ 'data' ][ 'extensions' ]:
       if e[ 'extension_type' ] == 'key_share':
@@ -160,6 +215,7 @@ class ClientHello( TLSMsg ):
         key_share_index += 1
     self.msg[ 'data' ][ 'extensions' ][ key_share_index ][ 'extension_data' ][ 'client_shares' ][ 0 ][ 'key_exchange' ] = b''
 
+    
 
 #    print( f" -- ClientHello: (tls) {tls.ClientHello.build( self.msg[ 'data' ] ) }" ) 
   ## when sesison resumption
@@ -184,10 +240,27 @@ class ClientHello( TLSMsg ):
     self.add_ext( ext_list )
 
   def to_bytes( self, content_type=None, msg=None ):
-    if self.conf[ 'illustrated_tls13'] is True:
-      if TLSMsg.to_bytes( self ) != pylurk.utils.str_to_bytes( self.illustrated_tls13_ch ):
-        raise ValueError( "ClientHello byte mismatch" )
+    record_layer = TLSMsg.to_bytes( self, content_type=None, msg=None )
+    self.bytes = record_layer
+    ## checking the snet bytes corresponds to the bytes in the test_vector
+##    if self.conf[ 'debug'][ 'test_vector' ] is True:
+##      if TLSMsg.to_bytes( self ) != pylurk.utils.str_to_bytes( self.illustrated_tls13_ch ):
+##        raise ValueError( "ClientHello byte mismatch" )
+    if self.conf[ 'debug'][ 'test_vector' ] is True:
+      tls_msg = TLSMsg()
+      tls_msg.from_test_vector( self.conf[ 'debug' ][ 'test_vector_file' ], 'client_hello' )
+#      test_vector_ch = ClientHello( tls_client_conf=self.conf )  
+      if record_layer != tls_msg.bytes :
+        raise ValueError( f"ClientHello byte mismatch"\
+       f"sending: {pylurk.utils.bytes_to_str(record_layer)}"\
+       f" expecting sending: {pylurk.utils.bytes_to_str(test_vector_ch.bytes)}" )
     return TLSMsg.to_bytes( self ) 
+
+  def from_bytes( self, byte_string ) :  
+    TLSMsg.from_bytes( self, byte_string )
+    if self.content_type != 'handshake' or self.msg[ 'msg_type' ] != 'client_hello':
+      raise ValueError( f"Expecting ClientHello and got {self.msg}" )
+
 
   def c_init_client_hello_update( self, lurk_resp, tls_handshake, lurk_client ):
     """ updates self.msg according to the c_init_client_hello response """
