@@ -649,6 +649,65 @@ HSEndOfEarlyData = Struct(
   'data' / EndOfEarlyData
 )
 
+### Alert message
+
+AlertLevel = Enum( BytesInteger(1),
+  warning = 1, 
+  fatal = 2
+)
+
+AlertDescription = Enum( BytesInteger(1),
+  close_notify = 0,
+  unexpected_message = 10,
+  bad_record_mac = 20,
+  decryption_failed_RESERVED = 21,
+  record_overflow = 22,
+  decompression_failure_RESERVED = 30,
+  handshake_failure = 40,
+  no_certificate_RESERVED = 41,
+  bad_certificate = 42,
+  unsupported_certificate = 43,
+  certificate_revoked = 44,
+  certificate_expired = 45,
+  certificate_unknown = 46,
+  illegal_parameter = 47,
+  unknown_ca = 48,
+  access_denied = 49,
+  decode_error = 50,
+  decrypt_error = 51,
+  export_restriction_RESERVED = 60,
+  protocol_version = 70,
+  insufficient_security = 71,
+  internal_error = 80,
+  inappropriate_fallback = 86,
+  user_canceled = 90,
+  no_renegotiation_RESERVED = 100,
+  missing_extension = 109,
+  unsupported_extension = 110,
+  certificate_unobtainable_RESERVED = 111,
+  unrecognized_name = 112,
+  bad_certificate_status_response = 113,
+  bad_certificate_hash_value_RESERVED = 114,
+  unknown_psk_identity = 115,
+  certificate_required = 116,
+  no_application_protocol = 120
+)
+
+Alert = Struct( 
+  'level' / AlertLevel, 
+  'description' / AlertDescription
+)
+
+
+#### change Cipher spec
+
+ChangeCipherSpecType = Enum( BytesInteger(1),
+  change_cipher_spec = 1
+)
+
+ChangeCipherSpec = Struct(
+  'type' / ChangeCipherSpecType
+)
 
 #### Encrypted messages
 ContentType = Enum( BytesInteger(1), 
@@ -664,8 +723,8 @@ TLSPlaintext = Struct(
   'legacy_record_version' /  Const( b'\x03\x03' ),
   'fragment' / Prefixed( BytesInteger(2), Switch( this.type, 
      { 'invalid' : GreedyBytes, 
-       'change_cipher_spec' : GreedyBytes, 
-       'alert' : GreedyBytes, 
+       'change_cipher_spec' : ChangeCipherSpec, 
+       'alert' : Alert, 
        'handshake' : Handshake, 
        'application_data' : GreedyBytes } ) )
 )
@@ -684,12 +743,14 @@ TLSPlaintext = Struct(
 
 TLSInnerPlaintext = Struct(
 #  'content' / GreedyBytes,
+  
   'content' / Switch( this._.type,
      { 'invalid' : GreedyBytes,
        'change_cipher_spec' : GreedyBytes,
        'alert' : GreedyBytes,
        'handshake' : Handshake,
-       'application_data' : Bytes( 4 ) } ),
+       'application_data' : Bytes( this._.clear_text_msg_len ) } ),
+#       'application_data' : Bytes( 4 ) } ),
 #       'application_data' : GreedyBytes } ),
   'type' / ContentType, 
 #  'zeros' / Array( this._.length_of_padding, Const(b'\x00') ) 
