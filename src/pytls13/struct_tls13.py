@@ -269,6 +269,32 @@ ECPointFormat = Enum( BytesInteger( 1 ),
 ECPointFormatList = Struct( 
   'ec_point_format_list' / Prefixed( BytesInteger( 1 ), GreedyRange( ECPointFormat  ) )
 )
+
+
+# certificate_authorities
+DistinguishedName = Prefixed( BytesInteger(2), GreedyBytes )
+
+CertificateAuthoritiesExtension = Struct(
+  'authorities' / Prefixed( BytesInteger(2), GreedyRange( DistinguishedName ) ) 
+)
+
+
+# oid filter
+OIDFilter = Struct(
+  'certificate_extension_oid' / Prefixed( BytesInteger(1), GreedyBytes ),
+  'certificate_extension_values' / Prefixed( BytesInteger(2), GreedyBytes )
+)
+
+OIDFilterExtension = Struct( 
+  'filters' / Prefixed( BytesInteger(2), GreedyRange( OIDFilter ) )
+)
+
+# cookie
+
+Cookie = Struct( 
+  'cookie' / Prefixed( BytesInteger(2), GreedyBytes )
+)
+
 ## Extension structure
 
 ExtensionType = Enum( BytesInteger(2), 
@@ -330,8 +356,12 @@ Extension = Struct(
            'server_hello' : ServerSupportedVersions 
          }
         ),
-      'post_handshake_auth' : PostHandshakeAuth,
+      'cookie' : Cookie,
       'psk_key_exchange_modes' : PskKeyExchangeModes, 
+      'certificate_authorities' : DistinguishedName,
+      'oid_filters' : OIDFilterExtension,
+      'post_handshake_auth' : PostHandshakeAuth,
+      'signature_algorithms_cert' : SignatureSchemeList, 
       'key_share': Switch(this._._msg_type, 
          {
           'client_hello' : KeyShareClientHello, 
@@ -489,6 +519,22 @@ CompressedCertificate = Struct(
 
 
 ## CertificateRequest
+
+CertificateRequestExtension = Struct(
+  '_name' / Computed('Extension'),
+  'extension_type' / ExtensionType,
+  'extension_data' /  Prefixed(BytesInteger(2),
+                      Switch(this.extension_type,
+    {
+#     'status_request' : 
+      'signature_algorithms' : SignatureSchemeList, 
+#     'signed_certificate_timestamp' :
+      'certificate_authorities' : DistinguishedName,
+      'oid_filters' : OIDFilterExtension,
+      'signature_algorithms_cert' : SignatureSchemeList, 
+ 
+    } ) )
+)
 CertificateRequest = Struct(
   '_name' / Computed('CertificateRequest'),
   'certificate_request_context' / Prefixed( BytesInteger(1), GreedyBytes),
