@@ -78,7 +78,7 @@ clt_conf = {
     ## maybe this may be generated from the CS configuration (or the reverse)
     'ephemeral_method' : 'e_generated', ## cs_generated / e_generated when ECDHE is needed. 
     ## these values are used for the supported_group (non mandatory) and key_share extension 
-    'supported_ecdhe_groups' : [ 'x25519' ], #[ 'secp256r1', 'x25519', 'x448' ], 
+    'supported_ecdhe_groups' : [ 'x25519' ], #[ 'secp256r1', 'x25519', 'x448' ],
   },
   'cs' : None
 }
@@ -143,8 +143,7 @@ class ClientTLS13Session:
 
     ## state variables
     self.c_register_tickets = False
-
-
+    
   def connect( self ):
     
     # indicates change_cipher_spec has been received
