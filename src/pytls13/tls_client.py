@@ -36,10 +36,6 @@ import pylurk.cs
 
 class TLSMsg:
 
-  ### currenlty from bytes and to bytes do not fully intantiate the TlsMsg 
-  ## - we probably should enable this - rather than having been done by show.
-  ## bytes shoudl probably be changed to tls_reccord
-  ## msg can be left or changed to fragment.
   def __init__( self, conf=None, content_type=None, content={}, sender=None ):
     
    
@@ -87,9 +83,8 @@ class TLSMsg:
     """ return a byte format TLS Reccord 
     
     The inner packet ( self.content ) is wrapped into the TLS Reccord.
-    """ 
-#    print( f"TLS PlainText: {tls_plain_text}\n" )
-#    return pytls13.struct_tls13.TLSPlaintext.build( tls_plain_text ) 
+    """
+
     return tls.TLSPlaintext.build( self.to_record_layer_struct( content_type=content_type, content=content  ) ) 
 
   def from_record_layer_struct( self, tls_plain_text ):
@@ -104,12 +99,6 @@ class TLSMsg:
   def from_record_layer_bytes( self, byte_string):
     """ Extract the inner message from a TLS Record in bytes"""
     tls_plain_text = tls.TLSPlaintext.parse( byte_string )
-#    if self.content_type!= None:
-#     if tls_plain_text[ 'type' ] !=  self.content_type :
-#        raise ValueError( f"unexpected content_type. Expecting {self.content_type}, got {tls_plain_text[ 'type' ]}" )
-#      if self.content_type == 'handshake' and self.msg_type != None: 
-#        if tls_plain_text[ 'fragment' ][ 'msg_type' ] != self.msg_type: 
-#          raise ValueError( f"unexpected msg_type. Expecting {self.msg_type}, got {tls_plain_text[ 'fragment' ][ 'msg_type' ]}" )
     self.content_type = tls_plain_text[ 'type' ]
     self.legacy_record_version = tls_plain_text[ 'legacy_record_version' ]
     self.content = tls_plain_text[ 'fragment' ]
@@ -118,8 +107,6 @@ class TLSMsg:
  
 
   def from_test_vector( self, test_vector_file, key ):
-    print( f" --- test_vector: {test_vector_file}" )
-    print( f" --- key: {key}" )
     with open( test_vector_file, 'rt', encoding='utf8' ) as f:
       test_vector = json.load( f )
     self.from_record_layer_bytes( pylurk.utils.str_to_bytes( test_vector[ key ] ) )
@@ -137,7 +124,6 @@ class TLSMsg:
   def show( self, content_type=None, content=None ):
     self.record_layer_bytes = self.to_record_layer_bytes( content_type=content_type, content=content )
     pylurk.utils.print_bin( "", self.record_layer_bytes ) 
-#    pprint.pprint( f"  - (bytes) [len {len( self.bytes )}] {binascii.hexlify( self.bytes, sep=' ' )}" )
     print ( f"  - (struct) : {tls.TLSPlaintext.parse( self.record_layer_bytes )}" )
   
   def add_ext( self, ext_list ) :
@@ -149,13 +135,10 @@ class TLSMsg:
 
     The current tls msg is considered as the inner clear text message
     """
-##    inner_cipher_text, inner_clear_text, clear_text_struct = c_h_cipher.encrypt( inner_tls_msg.content, content_type=inner_tls_msg.content_type, debug=True )
     inner_cipher_text, inner_clear_text, inner_clear_text_struct = cipher.encrypt( self.content, content_type=self.content_type, debug=True )
     tls_msg = TLSMsg( conf=self.conf, \
                       content_type='application_data', \
                       content=inner_cipher_text )
-#    tls_msg.content = inner_cipher_text
-#    tls_msg.content_type = 'application_data'
     if test_vector is not None: 
       test_vector.handle_tls_cipher_text_msg_enc( tls_msg, \
                                                   inner_clear_text,\
@@ -171,14 +154,7 @@ class TLSMsg:
     test_vector.handle_tls_cipher_text_msg_dec( self, inner_clear_text, inner_clear_text_struct, sender='server' )
     inner_tls_msg.from_record_layer_struct( inner_clear_text_struct )
     inner_tls_msg.sender = self.sender
-    ## possibly we should return the appropriated msg, encryptedEx, finished, certificateValidation....
     return inner_tls_msg
-#  def parse_record_layer_type( self):
-#    """ returns the reccord layer Content Type
-#
-#    possible values are 'handshake', 'change_cipher_spec', 'application'
-#    """
-#    return pytls13.struct_tls13.ContentType.parse( ( self.bytes[ 0 ] ).to_bytes(1, byteorder='big') )
 
 class TLSByteStreamParser:
 
@@ -188,23 +164,8 @@ class TLSByteStreamParser:
 
   def parse_record_layer_length( self) : 
     """ returns the recoord layer length from bytes """
-#    print( f" - reccord layer_length: {int.from_bytes( self.bytes[ 3 : 5 ] , byteorder='big') }" )
+
     return int.from_bytes( self.byte_stream[ 3 : 5 ] , byteorder="big") + 5
-
-#  def parse_handshake_type( self ):
-#    """ return the message type 
-#
-#    This corresponds to the first byte of the data carried in the reccord layer.
-#    When the content type is handshake this is the type of the handshake 
-#    message (client_hello, server_hello...
-#    For change_cipher_spec, this is a byte set to '01', for application, 
-#    this is the first byte of the encrypted application data.  
-#    As a result, thisis only useful for handshake messages.
-#    """
-#    print( f"msg_type: {self.parse_content_type( )}" )
-#    if self.parse_content_type( ) == 'handshake':
-#      return pytls13.struct_tls13.HandshakeType.parse( ( self.bytes[ 5 ] ).to_bytes(1, byteorder='big') )
-
 
   def parse_single_msg( self )-> dict:
     """ parse the message and return the inner fragment (of the TLS plain_text) and remaining bytes 
@@ -214,11 +175,9 @@ class TLSByteStreamParser:
     while self.parse_record_layer_length() > len( self.byte_stream ) :
       self.byte_stream += self.socket.recv( 4096 )
     record_layer = self.byte_stream[ : self.parse_record_layer_length() ]
-#    msg = tls.TLSPlaintext.parse( record_layer )
     tls_msg = TLSMsg()
     tls_msg.from_record_layer_bytes( record_layer )
     self.byte_stream = self.byte_stream[ self.parse_record_layer_length() : ]
-#    return msg  
     return tls_msg
 
 
@@ -227,8 +186,6 @@ class ClientHello( TLSMsg ):
 
   def __init__( self, conf=None, content={} ):
     TLSMsg.__init__( self, conf=conf, content_type='handshake', content=content, sender='client' )
-##  def __init__( self, conf=None, content={}, lurk_client=None, tls_handshake=None ):
-##    super().__init__( conf=conf, content_type='handshake', content=content, sender='client' )
     self.msg_type = 'client_hello'
     self.ecdhe_key_list = []
     self.record_layer_bytes = b''
@@ -237,30 +194,21 @@ class ClientHello( TLSMsg ):
     self.ks_list = []
     self.ks = None
 
-##    if self.conf[ 'debug' ][ 'test_vector' ] is True:
-##      self.init_from_test_vector( )
-##    else:
-##      self.init()
 
   def init_from_test_vector( self,  lurk_client=None, tls_handshake=None, ks=None):
-#    if test_vector_file is None: 
     self.tls_handshake = tls_handshake 
     self.lurk_client = lurk_client
     self.test_vector =  pytls13.test_vector.TestVector( self.conf[ 'debug' ] )
-#    test_vector_file = self.conf[ 'debug' ][ 'test_vector_file' ]
     super().from_test_vector( self.test_vector.file, 'client_client_hello' )
-#    tls_handshake = pylurk.tls13.tls_handshake.TlsHandshake( role= 'client')
     self.tls_handshake.msg_list.append( self.content )
     if self.tls_handshake.is_ks_proposed( ) is True :
       client_shares = self.tls_handshake.get_key_share( 'client' )
-#      client_shares = self.content[ 'data' ][ 'extensions' ][ key_share_index ][ 'extension_data' ][ 'client_shares' ]
       if self.conf[ 'tls13' ][ 'ephemeral_method' ] == 'cs_generated' :
         ## 1. build partial ClientHello
         for i in range( len( client_shares ) ) :
           client_shares[ i ][ 'key_exchange' ] = b''
         ks_designation, msg_index, key_share_index = self.tls_handshake.key_share_index( side='client' )
         self.tls_handshake.msg_list[ -1 ][ 'data' ][ 'extensions' ][ key_share_index ][ 'extension_data' ][ 'client_shares' ] = client_shares
-#          self.content[ 'data' ][ 'extensions' ][ key_share_index ][ 'extension_data' ][ 'client_shares' ][ i ][ 'key_exchange' ] = b''
         self.content = self.tls_handshake.msg_list[ -1 ]
         ## 2. Complete ClientHello with response from the CS
         lurk_resp = lurk_client.resp( 'c_init_client_hello', handshake=[ self.content ] )
@@ -283,10 +231,7 @@ class ClientHello( TLSMsg ):
     Other policies may be implemented. 
     
     """
-#    ### DEBUG BEGIN
-#    self.c_init_client_hello = True
-#    return
-#    ### DEBUG END
+
     self.c_init_client_hello = False
     if ( self.tls_handshake.is_psk_proposed() and has_proposed_psk_in_cs is True ) or\
        self.conf[ 'tls13' ][ 'ephemeral_method' ] == 'cs_generated' :
@@ -357,19 +302,12 @@ class ClientHello( TLSMsg ):
     self.set_lurk_session_state( has_proposed_psk_in_cs )
 
     # proceed to lurk exchange
-##    if ( self.tls_handshake.is_psk_proposed() and has_proposed_psk_in_cs is True ) or\
-##       self.conf[ 'tls13' ][ 'ephemeral_method' ] == 'cs_generated' :
     if self.c_init_client_hello is True:
       if has_proposed_psk_in_cs is True :
         secret_request = [ 'e_s', 'e_x' ]
       else:
         secret_request = []
-      ## DEBUG BEGIN
-      ## forcing e_s, e_x even if the ecdhe is local
-      secret_request = [ 'e_s', 'e_x' ]
-      ## DEBUG END
       lurk_resp = lurk_client.resp( 'c_init_client_hello', handshake=[ self.content ], psk_metadata_list=psk_metadata_list, secret_request=secret_request )
-#      self.c_init_client_hello = True
       self.tls_handshake.update_random( pylurk.tls13.lurk_tls13.Freshness( self.lurk_client.freshness ) )
 
       ## keyshare 
@@ -378,72 +316,10 @@ class ClientHello( TLSMsg ):
         client_shares = [ eph[ 'key' ] for eph in ephemeral_list ]
         self.tls_handshake.update_key_share( client_shares )
 
-###      ## updating random
-###      self.tls_handshake.update_random( pylurk.tls13.lurk_tls13.Freshness( self.lurk_client.freshness ) )
-###      
-###    # updating key share
-###    if self.conf[ 'tls13' ][ 'ephemeral_method' ] == 'cs_generated':
-###        self.post_c_init_client_hello_update_key_share( lurk_resp  )
-    
     # update_binders
-#    ## When the CS is involved, binder keys are returned and binders are computed.
-#    ## When the CS is not involved, binder_keys are computed. by the Engine.
     ## binder keys are generated only when not already provided by the CS.
     if self.tls_handshake.is_psk_proposed()  is True :
       if self.c_init_client_hello is True:
-#      if has_proposed_psk_in_cs is False : 
-        ## Note that in this case ticket_info contains the psk and ks can
-        ## be used to generate all secrets
-#        self.ks_list = self.tls_handshake.binder_scheduler_key_list( self.ticket_info_list ) 
-#        binder_finished_key_list = [ ks.finished_key( role='binder' ) for ks in self.ks_list ]
-#        self.tls_handshake.update_binders( self.ticket_info_list, binder_finished_key_list )
-##        ## FOR DEBUG: BEGIN 
-##        ## checking the values returned by the CS and yjose generated locally:
-##        pylurk.utils.print_bin( "ks binder_key [ cs ]", self.ks_list[ 0 ].secrets[ 'b' ] ) 
-##        pylurk.utils.print_bin( "ks psk [ cs ]", self.ks_list[ 0 ].psk ) 
-##        pylurk.utils.print_bin( f"binder_finished_key ", self.ks_list[ 0 ] .finished_key(  role='binder') )
-##        print( "Binder keys generated by E" )   
-##        binder_key_list = lurk_resp[ 'payload' ][ 'binder_key_list' ]
-##        binder_finished_key_list = [ ]
-##        for binder_key in binder_key_list:
-##          index = binder_key_list.index( binder_key )
-##          ticket_info = self.ticket_info_list[ index ] 
-##          tls_hash = ticket_info[ 'tls_hash' ]
-##          try:
-##            psk = ticket_info[ 'psk_bytes'] 
-##          except KeyError:
-##            psk = None
-##          if ticket_info[ 'psk_type' ] == 'external' :
-##            is_ext = True
-##          else:
-##            is_ext = False
-##          ## Note that unless psk is provided ks cannot be used to generate secrets
-##          ## ks is used to store the secrets, compute the binder_finished key
-##          ks = pylurk.tls13.key_scheduler.KeyScheduler( tls_hash, psk=psk, is_ext=is_ext )
-##          ks.secrets[ 'b' ] = binder_key[ 'secret_data' ]
-##          binder_finished_key_list.append( ks.finished_key( role='binder' ) )
-##          self.ks_list.append( ks )
-##          if self.test_vector is not None:
-##            self.test_vector.handle_bin( f"binder_key ({index})", ks.secrets[ 'b' ] )
-##            self.test_vector.handle_bin( f"binder_finished_key ({index})", ks.finished_key(  role='binder') )
-##        pylurk.utils.print_bin( "ks binder_key [ e ]", self.ks_list[ 0 ].secrets[ 'b' ] ) 
-##        pylurk.utils.print_bin( "ks psk [ e ]", self.ks_list[ 0 ].psk ) 
-##        pylurk.utils.print_bin( f"binder_finished_key ", self.ks_list[ 0 ] .finished_key(  role='binder') )
-##        ## FOR DEBUG: END 
-        
-#      else: 
-#        ### what is being done in e_generated begin
-#        ## question do we have teh same ks: values ?
-#        self.ks_list = self.tls_handshake.binder_scheduler_key_list( self.ticket_info_list )
-#        e_ks = self.ks_list[ 0 ] 
-#        pylurk.utils.print_bin( "ks binder_key [ e ]", e_ks.secrets[ 'b' ] ) 
-#        pylurk.utils.print_bin( "ks psk [ e ]", e_ks.psk ) 
-#        ## binder_finished_key_list = [ ks.finished_key( role='binder' ) for ks in self.ks_list ]
-#        ## self.tls_handshake.update_binders( self.ticket_info_list, binder_finished_key_list )
-#
-#        
-#        ### what is being done in e_generated end
- 
         binder_key_list = lurk_resp[ 'payload' ][ 'binder_key_list' ]
         binder_finished_key_list = [ ]
         for binder_key in binder_key_list:
@@ -501,11 +377,8 @@ class ClientHello( TLSMsg ):
         ## be used to generate all secrets
         self.ks_list = self.tls_handshake.binder_scheduler_key_list( self.ticket_info_list ) 
         binder_finished_key_list = [ ks.finished_key( role='binder' ) for ks in self.ks_list ]
-#        self.tls_handshake.update_binders( self.ticket_info_list, binder_finished_key_list )
       self.tls_handshake.update_binders( self.ticket_info_list, binder_finished_key_list )
       self.ks = self.ks_list[ 0 ]
-#      pylurk.utils.print_bin( "ks binder_key [ cs ]", self.ks.secrets[ 'b' ] ) 
-#      pylurk.utils.print_bin( "ks psk [ cs ]", self.ks.psk ) 
        
       
   def to_record_layer_bytes( self, content_type=None, content=None ):
@@ -515,8 +388,6 @@ class ClientHello( TLSMsg ):
       tls_msg = TLSMsg()
       key = self.descriptor( sender=self.sender )
       tls_msg.from_test_vector( self.conf[ 'debug' ][ 'test_vector_file' ], key )
-#      tls_msg.from_test_vector( self.conf[ 'debug' ][ 'test_vector_file' ], 'client_client_hello' )
-#      test_vector_ch = ClientHello( tls_client_conf=self.conf )  
       if record_layer != tls_msg.record_layer_bytes :
         raise ValueError( f"TLS {content_type} message byte mismatch\n"\
        f"sending: {pylurk.utils.bytes_to_str(record_layer)}\n"\
@@ -527,33 +398,6 @@ class ClientHello( TLSMsg ):
     TLSMsg.from_record_layer_bytes( self, byte_string )
     if self.content_type != 'handshake' or self.content[ 'msg_type' ] != 'client_hello':
       raise ValueError( f"Expecting ClientHello and got {self.content}" )
-
-#O-  def post_c_init_client_hello_update_key_share( self, lurk_resp  ):
-#O-    """ updates self.content according to the c_init_client_hello response """
-#O-#    self.c_init_client_hello = True
-#O-    self.tls_handshake.update_random( pylurk.tls13.lurk_tls13.Freshness( self.lurk_client.freshness ) )
-#O-    ## keyshare 
-#O-    ephemeral_list = lurk_resp[ 'payload' ][ 'ephemeral_list' ]
-#O-    client_shares = [ eph[ 'key' ] for eph in ephemeral_list ]
-#O-    self.tls_handshake.update_key_share( client_shares )
-#O-    self.content = self.tls_handshake.msg_list[ -1 ]
-#O-    ## we can only do it when we know the hash fucntion, that is PSK 
-#O-    ## or when cipher suite is selected. 
-#O-    ## tls_handshake.transcript_hash( 'e' )
-    
-
-####  def c_init_client_hello_update( self, lurk_resp  ):
-####    """ updates self.content according to the c_init_client_hello response """
-####    self.c_init_client_hello = True
-####    self.tls_handshake.update_random( pylurk.tls13.lurk_tls13.Freshness( self.lurk_client.freshness ) )
-####    ## keyshare 
-####    ephemeral_list = lurk_resp[ 'payload' ][ 'ephemeral_list' ]
-####    client_shares = [ eph[ 'key' ] for eph in ephemeral_list ]
-####    self.tls_handshake.update_key_share( client_shares )
-####    self.content = self.tls_handshake.msg_list[ -1 ]
-####    ## we can only do it when we know the hash fucntion, that is PSK 
-####    ## or when cipher suite is selected. 
-####    ## tls_handshake.transcript_hash( 'e' )
 
 class ExtClientProtocolVersions:
 
@@ -580,10 +424,8 @@ class ExtKeyShare:
   def __init__( self, tls_client_conf, test_vector  ):
     self.conf = tls_client_conf
     self.ecdhe_key_list = []
-#    self.ecdhe_public_key_list = []
     ## when generated by E, ke_entries are generated
     if self.conf[ 'tls13' ][ 'ephemeral_method' ] == 'e_generated' :
-#      self.ecdhe_key_list = []
       for group in self.conf[ 'tls13' ][ 'supported_ecdhe_groups' ]:
         ecdhe_key = pylurk.tls13.crypto_suites.ECDHEKey( )
         ecdhe_key.group = group
@@ -670,9 +512,7 @@ class ServerHello( ClientHello ):
   def get_shared_secret( self, client_hello, tls_handshake ):
     server_ecdhe_key = pylurk.tls13.crypto_suites.ECDHEKey( )
     server_ecdhe_key.generate_from_ks_entry( tls_handshake.get_key_share( 'server' ) )
-#    print( f" get_shared_key: client ecdhe_key_list  {[ k.group for k in client_hello.ecdhe_key_list ]}" )
     for client_ecdhe_key in client_hello.ecdhe_key_list:
-#      print( f" get_shared_key: client {client_ecdhe_key.group} / server {server_ecdhe_key.group}" )
       if client_ecdhe_key.group == server_ecdhe_key.group :
         shared_secret = server_ecdhe_key.shared_secret( client_ecdhe_key )
         break  
@@ -684,12 +524,7 @@ class ServerHello( ClientHello ):
     """ returns the tls_mode 'ecdhe', 'psk_ecdhe' or 'psk' """
    
     if tls_handshake.is_psk_agreed():
-#      if tls_handshake.is_ks_agreed() :
       psk_kex_modes = tls_handshake.client_hello_ext_data( 'psk_key_exchange_modes' )[ 'ke_modes' ]
-#      self.tls_mode = 'ecdhe'
-#      psk_kex_mode = tls_handshake.server_hello_ext_data( 'psk_key_exchange_modes' )
-#      if psk_kex_mode == 'psk_ke' :
-#        self.tls_mode = 'psk'
       if tls_handshake.is_ks_agreed() :
         self.tls_mode = 'psk_ecdhe' 
         if 'psk_dhe_ke' not in psk_kex_modes:
@@ -755,11 +590,7 @@ class ServerHello( ClientHello ):
     ## self.c_register_tickets = self.c_server_hello
 
     """
-#    ##DEBUG BEGIN
-#    self.c_server_hello = True
-#    self.c_register_tickets = True
-#    return None
-#    ##DEBUG END
+
     if self.tls_mode is None:
       self.set_tls_mode( tls_handshake )
     eph_method = self.conf[ 'tls13' ][ 'ephemeral_method' ] 
@@ -767,7 +598,6 @@ class ServerHello( ClientHello ):
     selected_psk_in_cs = False
     if self.tls_mode in [ 'psk', 'psk_ecdhe' ] :
       selected_psk = tls_handshake.server_hello_ext_data( 'pre_shared_key' )
-#      selected_psk = tls_handshake.server_hello_ext_data( 'pre_shared_key' )[ 'selected_identity' ]
       if client_hello.ticket_info_list[ selected_psk ][ 'psk_bytes' ] is None:
         selected_psk_in_cs = True
        
@@ -784,37 +614,6 @@ class ServerHello( ClientHello ):
     if self.conf[ 'tls13' ][ 'session_resumption' ] is False:
       self.c_register_tickets = False
 
-######
-##    if self.conf[ 'tls13' ][ 'session_resumption' ] is False:
-##      cs_registration = False
-##    ## the psk is provided to the CS if teh CS will provide an additional
-##    ## protection to the PSK. That is: 
-##    ## - with ECDHE mode: ecdhe is cs_generated and 'r' has not been provided by 'cs'
-##    ## - with PSK mode: PSK is in CS or ecdhe is cs_generated and 'r' has not been provided by cs.
-##    ##
-##    ## Otherwise:
-##    ## r can be generated and PSK can be generated by the engine.
-##    elif tls_handshake.is_certificate_agreed() is True :
-##      if self.conf[ 'tls13' ][ 'ephemeral_method' ] == 'cs_generated' :
-##        cs_registration = True
-##      else:
-##        cs_registration = False
-##    elif tls_handshake.is_psk_agree() is True :
-##      ## psk in use in the CS
-##      server_hello_exts = self.content[ 'data' ][ 'extensions' ]
-##      pre_shared_key = get_struct(server_hello_exts, 'extension_type', 'pre_shared_key' )
-##      selected_identity = pre_shared_key[ 'extension_data' ][ 'selected_identity' ]
-##      selected_ticket = tls_handshake.get_ticket( selected_identity=selected_identity)
-##      if ( engine_ticket_db.get_psk( selected_ticket ) is None or\
-##         ( self.conf[ 'tls13' ][ 'ephemeral_method' ] == 'cs_generated' and\
-##           tls_handshake.is_ks_agree() ) ) :
-##        cs_registration = True
-##    else: 
-##      raise ValueError( f"Unknown TLS mode" )
-##    return cs_registration
-######
-
-##  def handle_server_hello( self, lurk_client, client_hello, tls_handshake, ks, tls_msg, engine_ticket_db ) :
   def handle_server_hello( self, lurk_client, client_hello, tls_handshake, ks, tls_msg ) :
     self.content = tls_msg.content
     self.record_layer_bytes = tls_msg.record_layer_bytes
@@ -827,63 +626,13 @@ class ServerHello( ClientHello ):
 
     ## initialize ks
     if self.tls_mode in [ 'psk_ecdhe', 'psk' ]:
-#      selected_psk = tls_handshake.server_hello_ext_data( 'pre_shared_key' )[ 'selected_identity' ]
       selected_psk = tls_handshake.server_hello_ext_data( 'pre_shared_key' )
       ks = client_hello.ks_list[ selected_psk ]
-      ## DEBUG
-      e_tls_handshake = pylurk.tls13.tls_handshake.TlsHandshake( 'client' )
-      e_tls_handshake.msg_list = tls_handshake.msg_list[ : ] 
-      print( f"handle_server_hello: client ecdhe_key_list  {[ k.group for k in client_hello.ecdhe_key_list ]}" )
-
-      ## DEBUG
     else: 
       ks = pylurk.tls13.lurk_tls13.KeyScheduler( tls_hash=tls_handshake.get_tls_hash() , test_vector=tls_handshake.test_vector)
 
     if self.c_server_hello is True:
       self.handle_c_server_hello( lurk_client, tls_handshake, ks, client_hello )
-      ## e_generates work bu not cs_generated
-      ## we may need to manually compare the output of h_c, h_s taking the two paths. 
-      ## We could send the shared_secret to the CS.... but this woudl require to update the code to also have a c_init_client_hello whihc is probably too heavy. 
-      ## the manual approach may be acceptable. To ckeck.
-      ## What we should try to do is to get the 'r' by requesting it to the CS. 
-      ## this woudl make possibel the CS and the E to generate the psk.
-      ## Then we should set the c_server_hello to True.
-      ## 
-      ## DEBUG BEGIN
-#0#0      if self.tls_mode in [ 'psk_ecdhe', 'psk' ]:
-#0#0        print( f"--- E [cs] ks [secrets]: {ks.secrets }" )
-#0#0        pylurk.utils.print_bin( f"--- E [cs] ks [psk]:", ks.psk )
-#0#0        pylurk.utils.print_bin( f"--- E [cs] ks [ 'h_c']", ks.secrets[ 'h_c' ] )
-#0#0        pylurk.utils.print_bin( f"--- E [cs] ks [ 'h_s']", ks.secrets[ 'h_s' ] )
-#0#0#        pylurk.utils.print_bin( f"--- E [cs] ks [shared_secret]", ks.shared_secret )
-#0#0
-#0#0      ## DEBUG BEGIN
-#0#0      if self.tls_mode in [ 'psk_ecdhe', 'psk' ]:
-#0#0#        selected_psk = tls_handshake.server_hello_ext_data( 'pre_shared_key' )[ 'selected_identity' ]
-#0#0        selected_psk = e_tls_handshake.server_hello_ext_data( 'pre_shared_key' )
-#0#0        e_ks = client_hello.e_ks_list[ selected_psk ]
-#0#0#        print( f" e_tls_handshake: {e_tls_handshake.msg_list}" )
-#0#0        shared_secret = self.get_shared_secret( client_hello, e_tls_handshake )
-#0#0        e_ks.shared_secret = shared_secret
-#0#0        e_ks.process( [ 'h_s', 'h_c' ], e_tls_handshake )
-#0#0        print( f"--- E [e] ks [secrets]: {e_ks.secrets }" )
-#0#0        pylurk.utils.print_bin( f"--- E [e] ks [psk]:", e_ks.psk )
-#0#0        pylurk.utils.print_bin( f"--- E [e] ks [shared_secret]", e_ks.shared_secret )
-#0#0        pylurk.utils.print_bin( f"--- E [e] ks [ 'h_c']", e_ks.secrets[ 'h_c' ] )
-#0#0        pylurk.utils.print_bin( f"--- E [e] ks [ 'h_s']", e_ks.secrets[ 'h_s' ] )
-       
-
-
-      ## DEBUG END
-      ## conf is e_generated, so e is generated by E
-#      shared_secret = self.get_shared_secret( client_hello, tls_handshake )
-#      ks =  
-#      ks.shared_secret = shared_secret
-#      ks.process( [ 'h_s', 'h_c' ], tls_handshake )
-#      print( f"--- E [e] ks [secrets]: {ks.secrets }" )
-#      print( f"--- E [e] ks [psk]: {ks.psk }" )
-#      print( f"--- E [e] ks [shared_secret]: {ks.shared_secret }" )
-#      raise ValueError()       
     else:
       ephemeral_method = self.conf[ 'tls13' ][ 'ephemeral_method' ]
       if self.tls_mode =='psk' : 
@@ -897,48 +646,13 @@ class ServerHello( ClientHello ):
     return ks
 
 
-
-##########
-###    tls_mode = self.get_tls_mode( tls_handshake )
-###    ph_method = self.conf[ 'tls13' ][ 'ephemeral_method' ] 
-###
-###    if tls_mode in [ 'psk', 'psk_ecdhe' ] :
-###      selected_psk = self.get_server_hello_ext_data( 'pre_shared_key' )
-###       
-###    if tls_mode in [ 'ecdhe', 'psk_ecdhe' ] and eph_method == 'cs_generated' 
-###    ## new_session_ticket status / generation of 'r'
-###    self.c_register_tickets = self.get_c_register_tickets_status( engine_ticket_db, tls_handshake )
-###    self.c_server_hello = False
-###    ## initialize ks - if a different psk has been chosen 
-###    if tls_handshake.is_psk_agreed is True:
-###      selected_psk = self.get_server_hello_ext_data( 'pre_shared_key' )
-###      if selected_psk != None:
-###        ks = client_hello.ks_list[ selected_psk ] 
-###    else: # no psk
-###      ks = None
-###    ## In some cases, c_server_hello is not necessary to generate the h_s 
-###    ## and h_c - even after a c_init_client_hello exchange. 
-###    ## Typically, when ephemeral are generated by E, E may initiates a 
-###    ## c_init_client_hello exchange because some proposed PSK are hosted 
-###    ## by the CS. When the TLS server does not pick one of these PSKs, 
-###    ## E may generates on is own h_s and h_c. This implementation chose 
-###    ## to still interact with the CS.
-###    if client_hello.c_init_client_hello is True :
-###      self.c_server_hello = True
-###      ks = self.handle_c_server_hello( clt_conf, lurk_client, client_hello, tls_handshake, ks )
-###    else: ## neither psk nor echde generated by the cs
-###      ks = self.handle_e_server_hello( clt_conf, client_hello, tls_handshake, ks )
-###    return ks
-##########
-
-
   def handle_c_server_hello( self, lurk_client, tls_handshake, ks, client_hello ):
     """ performs the c_server_hello and update tls_handshake and ks """
 
     ephemeral_method = self.conf[ 'tls13' ][ 'ephemeral_method' ]
     ## prepare ephemeral
-    ## In some cases, c_server_hello is not necessary to generate the h_s and h_c. This implementation chose
-##    if tls_handshake.is_ks_agreed is False: 
+    ## In some cases, c_server_hello is not necessary to generate 
+    ## the h_s and h_c. This implementation chose
     if self.tls_mode == 'psk' : 
       eph =  { 'method': 'no_secret', 'key': b'' }
     elif self.tls_mode in [ 'ecdhe', 'psk_ecdhe' ]:
@@ -959,77 +673,10 @@ class ServerHello( ClientHello ):
       raise ValueError( f"unexpected tls_mode: {self.tls_mode}" )
           
     lurk_resp = lurk_client.resp( 'c_server_hello', handshake=[ self.content ], ephemeral=eph )
-#    if ks is None :
-#      ks = pylurk.tls13.lurk_tls13.KeyScheduler( tls_hash=tls_handshake.get_tls_hash() , test_vector=tls_handshake.test_vector)
-    ## update ks with secrets and perform handshake transcript
-##    sh.c_server_hello_update( lurk_resp, tls_handshake, ks )
-##    self.c_server_hello = True
     for secret in lurk_resp[ 'payload' ][ 'secret_list' ] :
       ks.secrets[ secret[ 'secret_type' ] ] = secret[ 'secret_data' ]
     ## mostly to ensure transcript_hash is synced
     tls_handshake.transcript_hash( 'h' )
-##    return ks  
-
-###  def handle_e_server_hello( self,  client_hello, tls_handshake,  ks ): 
-###    """ performs the c_server_hello and update tls_handshake and ks """
-###    ephemeral_method = self.conf[ 'tls13' ][ 'ephemeral_method' ]
-#####    if tls_handshake.is_ks_agreed is False: 
-###    if self.tls_mode =='psk' : 
-###      shared_secret = None
-###    elif ephemeral_method == 'e_generated' :
-###         shared_secret = self.get_shared_secret( client_hello, tls_handshake )
-###    else: 
-###      raise ValueError( "unknown / unexpected 'ephemeral_method': {eph_method}" )
-####    if ks is None :
-####      ks = pylurk.tls13.lurk_tls13.KeyScheduler( tls_hash=tls_handshake.get_tls_hash(), shared_secret=shared_secret, test_vector=tls_handshake.test_vector )
-###    ks.shared_secret = shared_secret
-###    ks.process( [ 'h_s', 'h_c' ], tls_handshake )
-#    return ks
-
-
-
-  
-###  def get_c_register_tickets_status( self, engine_ticket_db, tls_handshake ):
-###    """ determine if new_session_ticket should be register to the cs"""
-###    if self.conf[ 'tls13' ][ 'session_resumption' ] is False:
-###      cs_registration = False
-###    ## the psk is provided to the CS if teh CS will provide an additional
-###    ## protection to the PSK. That is: 
-###    ## - with ECDHE mode: ecdhe is cs_generated and 'r' has not been provided by 'cs'
-###    ## - with PSK mode: PSK is in CS or ecdhe is cs_generated and 'r' has not been provided by cs.
-###    ##
-###    ## Otherwise:
-###    ## r can be generated and PSK can be generated by the engine.
-###    elif tls_handshake.is_certificate_agreed() is True :
-###      if self.conf[ 'tls13' ][ 'ephemeral_method' ] == 'cs_generated' :
-###        cs_registration = True
-###      else:
-###        cs_registration = False
-###    elif tls_handshake.is_psk_agree() is True :
-###      ## psk in use in the CS
-###      server_hello_exts = self.content[ 'data' ][ 'extensions' ]
-###      pre_shared_key = get_struct(server_hello_exts, 'extension_type', 'pre_shared_key' )
-###      selected_identity = pre_shared_key[ 'extension_data' ][ 'selected_identity' ]
-###      selected_ticket = tls_handshake.get_ticket( selected_identity=selected_identity)
-###      if ( engine_ticket_db.get_psk( selected_ticket ) is None or\
-###         ( self.conf[ 'tls13' ][ 'ephemeral_method' ] == 'cs_generated' and\
-###           tls_handshake.is_ks_agree() ) ) :
-###        cs_registration = True
-###    else: 
-###      raise ValueError( f"Unknown TLS mode" )
-###    return cs_registration
-
-#    ## to be completed when psk is considered
-#    selected_psk_in_cs = True
-#    if self.conf[ 'tls13' ][ 'session_resumption' ] is True:
-#      if self.conf[ 'tls13' ][ 'ephemeral_method' ] == 'cs_generated' or \
-#         selected_psk_in_cs is True:
-#        self.c_register_tickets = True
-#    else:
-#      self.c_register_tickets = False
-      
-
-      
 
 
 class EncryptedExtensions( TLSMsg ):
@@ -1104,18 +751,6 @@ class CertificateVerify( TLSMsg ):
     elif algorithm in [ 'ed25519', 'ed448' ]:
       public_key.verify( signature, data ) 
     
-###    ## In this case the client is checking the signature sent by the server
-###    if self.sender == 'server':
-#####      c_cert_verify = tls_handshake.get_verify_data( ks, role='server',\
-####                      transcript_mode='finished') 
-#####                      transcript_mode='sig')
-###      c_verify_data = tls_handshake
-###      s_verify_data =  self.content[ 'data' ][ 'verify_data' ]
-###      pylurk.utils.print_bin( "client computed verify_data", c_verify_data )
-###      pylurk.utils.print_bin( "server provided verify_data", s_verify_data )
-###      if c_verify_data != s_verify_data : 
-###        raise ValueError( "Client unable to validate Finished message" )
-###      print( f"----- server signature checked sucessfully" ) 
 
   def handle_c_client_finished( self, lurk_client, ks, handshake_msg_list ) :
     """ generates certificate_verify and updates ks """
@@ -1141,20 +776,6 @@ class CertificateVerify( TLSMsg ):
       server_cert = { 'cert_type' : 'no_certificate', 'certificate' : b'' }
       client_cert = { 'cert_type' : 'no_certificate', 'certificate' : b'' }
       
-##    ## if last message is (client) certificate 
-##    ## certificate = 
-##    ## cert_type = 
-##    ## else:  
-##    if tls_handshake.is_certificate_request( ) is True:
-##      pass
-##    else:
-##      client_cert = { 'cert_type' : 'no_certificate', 'certificate' : b'' }
-##
-##    server_cert = { 'cert_type' : 'no_certificate', 'certificate' : b'' }
-##    for m in tmp_handshake:
-##      if m[ 'msg_type' ] == 'certificate' :
-##        tmp_handshake.remove( m ) 
-##        server_cert = { 'cert_type' : 'uncompressed', 'certificate' : m[ 'data' ] } 
     lurk_resp = lurk_client.resp( 'c_client_finished', \
                               last_exchange=last_exchange, \
                               handshake=handshake_msg_list, \
@@ -1220,47 +841,6 @@ class NewSessionTicket( TLSMsg ):
     self.msg_type ='new_session_ticket'
     self.c_register_ticket = False
 
-#######  def handle_register( self, tls_handshake, ks, e_psk_db, client_cert_verif ):
-#####  def handle_register( self, tls_handshake, ks, e_psk_db, client_cert_verif ):
-#####    if self.conf[ 'tls13' ][ 'session_resumption' ] is False:
-#####      cs_registration = False
-#####    elif ks.secrets[ 'r' ] is not None:
-#####      cs_registration = False
-#####     
-######    ticket = inner_tls_msg.content[ 'data' ] 
-######    ticket = self.content[ 'data' ]
-#####    if self.conf[ 'tls13' ][ 'session_resumption' ] is False:
-#####      cs_registration = False
-#####    ## the psk is provided to the CS if teh CS will provide an additional
-#####    ## protection to the PSK. That is: 
-#####    ## - with ECDHE mode: ecdhe is cs_generated and 'r' has not been provided by 'cs'
-#####    ## - with PSK mode: PSK is in CS or ecdhe is cs_generated and 'r' has not been provided by cs.
-#####    ##
-#####    ## Otherwise:
-#####    ## r can be generated and PSK can be generated by the engine.
-#####    elif tls_handshake.is_certificate_agree() :
-#####      if self.conf[ 'tls13' ][ 'ephemeral_method' ] == 'cs_generated' :
-#####        cs_registration = True
-#####      else:
-#####        cs_registration = False
-#####    elif tls_handshake.is_psk_agree() :
-#####      selected_ticket = tls_handshake.get_ticket( sh.psk_ext )[ 'selected_identiy' ]
-#####      if ( engine_ticket_db.get_psk( selected_ticket ) is None or\
-#####         ( self.conf[ 'tls13' ][ 'ephemeral_method' ] == 'cs_generated' and\
-#####           tls_handshake.is_ks_agree() ) ) :
-#####        cs_registration = True
-#####        
-#######      selected_psk = ch.presharedkeyext[ sh.presharedkeyext ]     
-#####     
-#####    else: 
-#####      raise ValueError( f" unknown TLS mode" )
-#####    if ks.secret[ 'r' ] is not None :
-#####      if client_cert_verif.c_client_finished is True :
-#####        self.handle_c_register_ticket( lurk_client, ks )
-#####    new_session_ticket = self.content[ 'data' ] 
-#####    e_psk_db.add( new_session_ticket=new_session_ticket, ks=ks )
-    
-   
   def handle_c_register_ticket( self, lurk_client ) :
     """ generates certificate_verify and updates ks """
     new_session_ticket = self.content[ 'data' ] 
@@ -1269,7 +849,6 @@ class NewSessionTicket( TLSMsg ):
                                   ticket_list=[ new_session_ticket ] ) 
 
 class EngineTicketDB( pylurk.tls13.lurk_tls13.TicketDB ) :
-#class EngineTicketDB ( TicketDB ) :
   """ Storing tickets received by the server
 
   Unlike TicketDB, the engine may not be aware of the psk.
@@ -1292,7 +871,6 @@ class EngineTicketDB( pylurk.tls13.lurk_tls13.TicketDB ) :
         key = None
     return key
 
-#  def add_new_session_ticket( self, conf, new_session_ticket, ks, tls_handshake ) :
   def register( self, conf, new_session_ticket, ks, tls_handshake ) :
    
     psk = None
@@ -1310,46 +888,13 @@ class EngineTicketDB( pylurk.tls13.lurk_tls13.TicketDB ) :
     else:
       self.db[ key ] = [ ticket_info ]
 
-#  def update_ticket_info( self, ticket_info ):
-#    if ticket_info[ 'psk_type' ] == 'external':
-#      obfuscated_ticket_age = 0
-#    else :
-#      obfuscated_ticket_age = int( ( time.time( ) - ticket_info[ 'registration_time' ] ) * 1000 + ticket_info[ 'new_session_ticket' ][ 'ticket_age_add' ] ) % 2**32
-
-#ticket_info[ 'obfuscated_ticket_age' ] = obfuscated_ticket_age
-#    del ticket_info[ 'registration_time' ]
-#    return  ticket_info
-
   def get_ticket_info_list( self, clt_conf ):
-#  def get_psk_list( self, ):
-#    print( self.db )
     ticket_list = []
     k = self.key( clt_conf )
     if k is None:
       pass
     elif k in self.db.keys(): 
-#    try:
       for t in self.db[ k ]: 
         ticket_list.append( self.update_ticket_info( t ) )
     return ticket_list
-#    except KeyError:
-#      return []
-
-###  def is_ticket_info_list_shared_with_cs( self, ticket_info_list ):
-###    """ returns True if at least one psk is only known by the cs """
-###    for ticket_info in ticket_info_list :
-###      if ticket_info[ 'psk' ] is None:
-###        return True
-###    return False
-###     
-###  def get_psk( self, ticket, conf=None ):
-###    """ """
-###    if conf is None:
-###      ticket_info_list = self.db.values()
-###    else: 
-###      ticket_info_list = get_ticket_info_list( conf )
-###    for ticket_info in ticket_info_list : 
-###      if ticket_info[ 'new_session_ticket' ][ 'ticket' ] == ticket :
-###        return ticket[ 'psk' ]
-###    raise ValueError( f"ticket {ticket} not found in psk database" ) 
 

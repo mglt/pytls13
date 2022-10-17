@@ -32,7 +32,6 @@ This scripts details the case where a TLS client performs a TLS handshake with:
 Such interaction only involves a c_init_client_finished between the TLS Engine (E) and the CS
 """
 
-## illustrated TLS 'ephemeral_method' : 'cs_generated' / 'e_generated'
 clt_conf = {
   'role' : 'client',
   'server' : {
@@ -48,21 +47,11 @@ clt_conf = {
     'test_vector' : False,
     'test_vector_file' : '/home/emigdan/gitlab/pytls13/src/pytls13/illustrated_tls13.json',
     'test_vector_mode' : 'check', # check / record
-    ## in some cases, the test vector is performed by establishing a real 
-    ## TCP connection. In such cases, sent packets are __effectively__ 
-    ## being sent to the other peer and incoming packets are __effectively__ 
-    ## being received by the other peer.  If that is the case, than 'remote'
-    ## should be picked. 
-    ## In other cases, packets are not sent and received, but instead locally
-    ## provided from a file. 
-    'test_vector_tls_traffic' : True, #'local' # / remote 
   },
   'lurk_client' : {
     'freshness' : 'null'
   }, 
   'tls13' : {
-#    'illustrated_tls13': True,
-#    'trace_mode': True,
 #    'ecdhe_authentication' : True, ## ecdhe indicates certificate based authentication
     'ke_modes' : [ 'psk_dhe_ke'], ## psk_ke
     'session_resumption' : True,
@@ -76,7 +65,7 @@ clt_conf = {
     ## configuration of ecdhe requires some synchronization with the cs 
     ## configuration.
     ## maybe this may be generated from the CS configuration (or the reverse)
-    'ephemeral_method' : 'e_generated', ## cs_generated / e_generated when ECDHE is needed. 
+    'ephemeral_method' : 'cs_generated', ## cs_generated / e_generated when ECDHE is needed. 
     ## these values are used for the supported_group (non mandatory) and key_share extension 
     'supported_ecdhe_groups' : [ 'x25519' ], #[ 'secp256r1', 'x25519', 'x448' ],
   },
@@ -84,16 +73,11 @@ clt_conf = {
 }
 
 
-
-
-
-## PSK store
 print( f"::Instantiating the Ticket/PSK database" )
 engine_ticket_db = pytls13.tls_client.EngineTicketDB()
 
-##new_session_ticket_db = { (clt_conf[ 'server'][ 'ip' ], clt_conf[ 'server'][ 'port' ]) }
 
-## configuration of the CS for 'Ed25519'
+print( f"::Instantiating the CS" )
 if clt_conf[ 'cs' ] is None :
   sig_scheme = 'ed25519'
   clt_cs_conf = pylurk.conf.Configuration( )
@@ -102,7 +86,6 @@ if clt_conf[ 'cs' ] is None :
   clt_cs_conf.set_extention( ext=( 'tls13', 'v1' ) )
   clt_cs_conf.conf[ ( 'tls13', 'v1' ) ][ 'debug' ] = clt_conf[ 'debug' ] 
   clt_conf[ 'cs' ] = clt_cs_conf.conf
-print( f"::Instantiating the CS" )
 cs = pylurk.cs.CryptoService( conf=clt_cs_conf.conf )
 
 
@@ -112,8 +95,6 @@ class ClientTLS13Session:
   def __init__( self, clt_conf, engine_ticket_db=None, cs=None ) :
     self.clt_conf = clt_conf
     self.engine_ticket_db = engine_ticket_db
-#    self.cs = cs
-#    self.ks = None ## kept for next_application_traffic_secret
     print( f"::Instantiating the Lurk client" )
     self.lurk_client = pylurk.lurk_client.LurkTls13Client( cs )
     try: 
@@ -149,19 +130,9 @@ class ClientTLS13Session:
     # indicates change_cipher_spec has been received
     change_cipher_spec_received = False 
     
-    
-    if self.clt_conf[ 'debug' ][ 'test_vector' ] is True and \
-       self.clt_conf[ 'debug' ][ 'test_vector_tls_traffic' ] is False: 
-      no_traffic = True
-    else: 
-      no_traffic = False
-    
-    
-    if no_traffic is False:
-      print( f"::TCP session with the TLS server")
-      self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-      self.s.connect( ( self.clt_conf[ 'server' ][ 'ip' ], self.clt_conf[ 'server' ][ 'port' ] ) )
-    
+    print( f"::TCP session with the TLS server")
+    self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    self.s.connect( ( self.clt_conf[ 'server' ][ 'ip' ], self.clt_conf[ 'server' ][ 'port' ] ) )
     
     print( f"::Sending ClientHello to the server\n--->" )
     ch = pytls13.tls_client.ClientHello( conf=self.clt_conf )
@@ -173,23 +144,11 @@ class ClientTLS13Session:
         self.ks = ch.ks
     self.test_vector.handle_tls_clear_text_msg( ch, 'client' )
       
-    if no_traffic is False:
-      self.s.sendall( ch.to_record_layer_bytes() )
+    self.s.sendall( ch.to_record_layer_bytes() )
     
-    if no_traffic is True:
-      tls_msg_list = []
-      for key in [ 'server_server_hello', 'server_change_cipher_spec', 'server_certificate_verify', 'server_finished' ]:
-        if key in self.test_vector.db.keys():
-          tls_msg = pytls13.TLSMsg( )
-          tls_msg.from_record_layer_bytes( pylurk.utils.str_to_bytes( self.test_vector.db[ key ] ) ) 
-          tls_msg_list.append( tls_msg ) 
-    else:
-      self.stream_parser = pytls13.tls_client.TLSByteStreamParser( self.s )
+    self.stream_parser = pytls13.tls_client.TLSByteStreamParser( self.s )
     while True:
-      if no_traffic is True:
-        tls_msg_list.pop( 0 )
-      else:
-        tls_msg = self.stream_parser.parse_single_msg( )
+      tls_msg = self.stream_parser.parse_single_msg( )
       if tls_msg.content_type == 'handshake': 
         self.test_vector.handle_tls_clear_text_msg( tls_msg, sender='server' ) 
         if tls_msg.content[ 'msg_type' ] == 'server_hello' : 
@@ -203,7 +162,6 @@ class ClientTLS13Session:
         s_h_cipher.debug( self.test_vector, description='server_handshake' )
         c_h_cipher = pylurk.tls13.crypto_suites.CipherSuite( cipher_suite, self.ks.secrets[ 'h_c' ] )
         c_h_cipher.debug( self.test_vector, description='client_handshake' )
-        pylurk.utils.print_bin( '--- DEBUG server hello', sh.to_record_layer_bytes() )
         ## keep track of the messages for the next lurk request
         ## transcripts are performed at least to check the server finished 
         ## message. Why: The current tls_handshake erases the stored handshake 
