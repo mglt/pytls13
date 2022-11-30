@@ -1,7 +1,7 @@
 import json
 import os.path
 import pylurk.utils
-import pytls13.tls_client
+import pytls13.tls_client_handler
 
 class TestVector( pylurk.utils.TestVector ):
 
@@ -41,7 +41,7 @@ class TestVector( pylurk.utils.TestVector ):
     'sender' is used to differentiates the client and the server. 
     """
     if isinstance( tls_msg, dict ):
-      tmp_tls_msg = pytls13.tls_client.TLSMsg( )
+      tmp_tls_msg = pytls13.tls_client_handler.TLSMsg( )
       tmp_tls_msg.from_record_layer_struct( tls_msg )
       tls_msg = tmp_tls_msg
 #    if tls_msg.content_type == 'handshake' :

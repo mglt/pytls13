@@ -41,6 +41,10 @@ SignatureScheme = Enum( Bytes(2),
   rsa_pss_pss_sha512 = b'\x08\x0b',
   rsa_pkcs1_sha1 = b'\x02\x01',
   ecdsa_sha1 = b'\x02\x03',
+  ## The format is the one defined for TLS 1.2 
+  backward_compatibility_sha224_rsa = b'\x03\x01', 
+  backward_compatibility_sha224_ecdsa = b'\x03\x03', 
+
 )
 
 SignatureSchemeList = Struct(
@@ -538,7 +542,8 @@ CertificateRequestExtension = Struct(
 CertificateRequest = Struct(
   '_name' / Computed('CertificateRequest'),
   'certificate_request_context' / Prefixed( BytesInteger(1), GreedyBytes),
-  'extensions' / Prefixed(BytesInteger(2), GreedyRange(Extension))
+#  'extensions' / Prefixed(BytesInteger(2), GreedyRange(Extension))
+  'extensions' / Prefixed(BytesInteger(2), GreedyRange(CertificateRequestExtension))
 )
 
 ## CErtificateVErify

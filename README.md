@@ -9,22 +9,19 @@ The `openssl` directory contains the necessary information to start a default TL
 cd pytls13/tests/openssl
 ## Starting OpenSSL TLS server (no client authentication):
 cd  openssl
-openssl s_server -accept 8402  -tls1_3 -ciphersuites TLS_CHACHA20_POLY1305_SHA256 -key server.key -cert server.crt -debug -keylogfile key.txt -msg -state -tlsextdebug
+openssl s_server -accept 8402  -tls1_3 -ciphersuites TLS_CHACHA20_POLY1305_SHA256 -key server.key -cert server.crt -debug -keylogfile key.txt -msg -state -tlsextdebug -www
 
 ## Starting OpenSS TLS Client (no client authentication):
 openssl s_client -connect 127.0.0.1:8402 -tls1_3 -debug -keylogfile keylog.txt -msg -state -tlsextdebug
 ```
 
-https://newbedev.com/testing-ssl-tls-client-authentication-with-openssl/
-
-openssl s_server -cert server_cert.pem -key server_key.pem -WWW -port 8402 -CAfile client_cert.pem -verify_return_error -Verify 1
-
+The following [page](https://newbedev.com/testing-ssl-tls-client-authentication-with-openssl/) details how to configure and test TLS client authentication.
 
 
 ```
 ## Starting OpenSSL TLS server (client authentication):
-cd  openssl
-openssl s_server -cert server.crt -key server.key -WWW -port 8402 -CAfile client.crt  -debug -keylogfile key.txt -msg -state -tlsextdebug -verify_return_error -Verify 1
+cd  pytls13/tests/openssl/openssl
+openssl s_server -cert server.crt -key server.key -WWW -port 8403 -CAfile client.crt  -debug -keylogfile key.txt -msg -state -tlsextdebug -verify_return_error -Verify 1
 
 ```
 
@@ -38,7 +35,7 @@ wiresharks tcp.port==1799
 
 ```
 
-# Generating TLS certificates 
+# Generating TLS certificates with openSSL 
 
 The procedure for generating Ed25519 certificates can be found [here](https://blog.pinterjann.is/ed25519-certificates.html). The procedure for generating RSA certificates can be found [here](https://www.vertica.com/docs/9.2.x/HTML/Content/Authoring/Security/SSL/GeneratingCertificationsAndKeys.htm) and reminded below:
 
