@@ -127,14 +127,62 @@ class ClientTLS13Session:
     self.ks = None ## will be initialized at various step
 
 
-    ### we need to make sure these are used to reflect the sate diagram.
     ## state variables
-    self.c_register_tickets = False
-    self.c_server_hello = None
-    self.c_client_finished = None
-    self.c_init_client_finished = None
-    self.cert_req = None
+    ##
+    ## The state variables reflect the state diagram mentioned below:
+    ##
+    ##                ^ (self.c_init_client_hello)
+    ## ClientHello    | method is 'cs_generated' | no
+    ##   Derivation   | or PSK in CS Proposed    |----------+
+    ## ClientHello    |     yes |                           |
+    ##   sent      -->v  c_init_client_hello                |
+    ## ServerHello -->^         |        |     certificate_request or   no
+    ##   received     |  c_server_hello (a)    post_hand_auth_proposed ---+  
+    ##                |         |        |              yes |             | 
+    ## ServerHello    |  c_client_finished        c_init_client_finished  |
+    ##   Treatment    |         |                           |             |
+    ## clientFinished |         +---------+-----------------+     no CS protection
+    ##   sent      -->v                   |                       provided   
+    ##                ^                   |     
+    ##                |+----------------->+     
+    ## Posthandshake  ||        +---------+-----------+
+    ## Treatment      ||        |                     |
+    ##                || (self.post_hand_auth)  (self.c_register_tickets)
+    ##                ||post_hand_auth_proposed method is 'cs_generated' | 
+    ##                ||        +               or  PSK in use in CS     |
+    ##                ||CertificateRequest            +  
+    ##                ||        |               NewSessionTicket
+    ##                ||        |                     | 
+    ##                ||c_post_hand_auth        c_register_tickets
+    ##                ||        |                     | 
+    ##                ||        +-------+-------------+
+    ##                ||                | 
+    ##                v+----------------+     
+    ##                                  |     
+    ##                             LURK session
+    ##                             closed           
+    ##
+    ## (a) ( optional: when method is 'e_generated' or 'no_secret')  and chosen 
+    ## PSK not in CS, E may generate h_c and h_s, but these may also be generates 
+    ## by CS.
+    ## The state variable used in the program are mentioned between () 
+    ## 
+    ## Determine if the TLS client will register the NewSessionTicket to the CS
+    ## This includes the condition mentioned in the diagram as: 
+    ## method is 'cs_generated' or  PSK in use in CS
+    ## as well as some configuration parameters such as whether the TLS Client 
+    ## enables session resumption. 
+    ## When set to True c_register_tickets exchanges are expected upon receiving 
+    ## a NewSessionTicket.
+    ## This variable is set by the ServerHello class (see set_lurk_session_state ) 
+    self.c_register_tickets = None
+    ## Determine if the TLS client has proposed Post Handshake Authentication
+    ## While the variable is read from the ClientHello, this condition is  
+    ## expected to reflect directly the configuration. 
     self.post_hand_auth = None
+    ## Indicates a LURK session has been initiated. This is used to distinguishes between 
+    ## c_init_client_finished and a c_client_finished exchange. 
+    self.c_init_client_hello = None
 
   def connect( self ):
     
@@ -154,7 +202,8 @@ class ClientTLS13Session:
       if self.tls_handshake.is_psk_proposed() is True:
         self.ks = ch.ks
     self.test_vector.handle_tls_clear_text_msg( ch, 'client' )
-    self.tls_handshake.is_post_hand_auth_proposed( )   
+    self.post_hand_auth = self.tls_handshake.is_post_hand_auth_proposed( )  
+    self.c_init_client_hello = ch.c_init_client_hello
     self.s.sendall( ch.to_record_layer_bytes() )
     
     self.stream_parser = pytls13.tls_client_handler.TLSByteStreamParser( self.s )
@@ -254,11 +303,10 @@ class ClientTLS13Session:
     ## the CS has generated the ECDHE (cs_generated). 
     ##
     ## 
-##    c_client_finished_sent = False
-##    c_init_client_finished_sent = False
      
-    ## if a LURK session has already been established
-    if sh.c_server_hello is True or ch.c_init_client_hello is True:
+    ## if a LURK session has already been established, a c_client_finished exchange is necessary to 
+    ## retrieve the application secrets and (when the TLS client is authenticated the signature)
+    if self.c_init_client_hello is True:
       ## the TLS client is authenticated 
       if self.tls_handshake.is_certificate_request_state is True:
         ## generates the certificate
@@ -267,38 +315,24 @@ class ClientTLS13Session:
         client_cert.encrypt_and_send( cipher=c_h_cipher, socket=self.s, sender='client', test_vector=self.test_vector ) 
         self.tls_handshake.msg_list.append( client_cert.content )
         tmp_handshake.append( client_cert.content )
-#        print( f" 0 -- (cert) tls_handshake: {self.tls_handshake.msg_list}" )
-        ## certificate_verify is performed even without signature 
-        ## being generated to generate a_c, a_s
+        ## generates the CertificatVerify
         client_cert_verify = pytls13.tls_client_handler.CertificateVerify( conf=self.clt_conf, sender='client' )
-        client_cert_verify.handle_c_client_finished( self.lurk_client, self.ks, tmp_handshake, sh.c_register_tickets )
-        ## I do nto think we can have a signature b'' or None
-        ## the condition does not seem to apply and is always true
-        if client_cert_verify.content[ 'data' ][ 'signature' ] not in [ b'', None ]:
-          self.tls_handshake.msg_list.append(  client_cert_verify.content )
-          client_cert_verify.encrypt_and_send( cipher=c_h_cipher, socket=self.s, sender='client', test_vector=self.test_vector ) 
-#        self.tls_handshake.msg_list.append( client_cert.content )
-#        print( f" 1 -- (cert_verif) tls_handshake: {self.tls_handshake.msg_list}" )
+        client_cert_verify.handle_c_client_finished( self.lurk_client, self.ks, tmp_handshake, self.c_register_tickets )
+        self.tls_handshake.msg_list.append(  client_cert_verify.content )
+        client_cert_verify.encrypt_and_send( cipher=c_h_cipher, socket=self.s, sender='client', test_vector=self.test_vector ) 
       ## the TLS client is not authenticated
-      ## There is no client_cert_verify message but we use the handler 
-      ## to generate the application secrets by requesting the CS
-      ## the only difference with the previous case is that the CS 
-      ## returns a empty signature. 
-      ## We could have removed the subcase: is_certificate_request_state 
-      ## but prefer for readability to keep it. 
+      ## There is no client_cert_verify message but we use the client_cert_verify handles the  
+      ## interaction with the CS to retrieve the application secrets.
+      ## The returned signature is empty.
       else: 
          client_cert_verify = pytls13.tls_client_handler.CertificateVerify( conf=self.clt_conf, sender='client' )
-         client_cert_verify.handle_c_client_finished( self.lurk_client, self.ks, tmp_handshake, sh.c_register_tickets )
-##      c_client_finished_sent = True
+         client_cert_verify.handle_c_client_finished( self.lurk_client, self.ks, tmp_handshake, self.c_register_tickets )
     ## No existing LURK session
     else:
-      ## the TLS Client is authenticated
-      ## or post authentication has been proposed 
-      if self.tls_handshake.is_certificate_request( ) is True or \
-        self.tls_handshake.is_post_hand_auth_proposed() is True  :
-        print( f" BEFORE processing application secret -- tls_handshake: {self.tls_handshake.msg_type_list()}" )
+      ## the TLS Client is authenticated or post authentication has been proposed 
+      ## In this case interaction with the CS is performed via a c_init_client_finished exchange
+      if self.tls_handshake.is_certificate_request( ) is True or self.post_hand_auth is True  :
         self.ks.process( [ 'a_s', 'a_c' ], self.tls_handshake )
-        print( f" AFTER processing application secret -- tls_handshake: {self.tls_handshake.msg_type_list()}" )
         ## this is a hack
         tmp_handshake.insert( 0, sh.content )
         tmp_handshake.insert( 0, ch.content )
@@ -308,26 +342,20 @@ class ClientTLS13Session:
         self.tls_handshake.msg_list.append( client_cert.content )
         tmp_handshake.append( client_cert.content )
         client_cert_verify = pytls13.tls_client_handler.CertificateVerify( conf=self.clt_conf, sender='client' )
-        client_cert_verify.handle_c_init_client_finished( self.lurk_client, self.ks, tmp_handshake, sh.c_register_tickets )
+        client_cert_verify.handle_c_init_client_finished( self.lurk_client, self.ks, tmp_handshake, self.c_register_tickets )
         self.tls_handshake.msg_list.append(  client_cert_verify.content )
-        print( f" ADDING certVerify -- tls_handshake: {self.tls_handshake.msg_type_list()}" )
-        
         client_cert_verify.encrypt_and_send( cipher=c_h_cipher, socket=self.s, sender='client', test_vector=self.test_vector ) 
         
-        ## proceed to c_init_client_finished
-##        c_init_client_finished_sent = True
       ## TLS client is no authenticated
-      ## This basically means that everything has been Handled by E
-      ## so far and application secrets are handled by E.
+      ## This basically means that everything has been handled by E which also 
+      ## generates the application secrets
       else:
         self.ks.process( [ 'a_s', 'a_c' ], self.tls_handshake ) 
     
     print( "--- E -> TLS Server: Sending Client Finished" )
-    print( f" END -- tls_handshake: {self.tls_handshake.msg_type_list()}" )
     self.tls_handshake.update_finished( self.ks )
     client_finished = pytls13.tls_client_handler.Finished( conf=self.clt_conf, content=self.tls_handshake.msg_list[ -1 ], sender='client' )
     client_finished.encrypt_and_send( cipher=c_h_cipher, socket=self.s, sender='client', test_vector=self.test_vector ) 
-    print( f"  - self.ks.secrets: {self.ks.secrets}" ) 
     self.s_a_cipher = pylurk.tls13.crypto_suites.CipherSuite( cipher_suite, self.ks.secrets[ 'a_s' ] )
     self.s_a_cipher.debug( self.test_vector, description='server_application' )
     self.c_a_cipher = pylurk.tls13.crypto_suites.CipherSuite( cipher_suite, self.ks.secrets[ 'a_c' ] )
