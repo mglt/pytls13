@@ -762,7 +762,6 @@ ChangeCipherSpec = Struct(
 
 #### Encrypted messages
 ContentType = Enum( BytesInteger(1), 
-  invalid = 0,
   change_cipher_spec = 20, 
   alert = 21,
   handshake = 22, 
@@ -773,8 +772,7 @@ TLSPlaintext = Struct(
   'type' / ContentType, 
   'legacy_record_version' /  Const( b'\x03\x03' ),
   'fragment' / Prefixed( BytesInteger(2), Switch( this.type, 
-     { 'invalid' : GreedyBytes, 
-       'change_cipher_spec' : ChangeCipherSpec, 
+     { 'change_cipher_spec' : ChangeCipherSpec, 
        'alert' : Alert, 
        'handshake' : Handshake, 
        'application_data' : GreedyBytes } ) )
@@ -796,9 +794,8 @@ TLSInnerPlaintext = Struct(
 #  'content' / GreedyBytes,
   
   'content' / Switch( this._.type,
-     { 'invalid' : GreedyBytes,
-       'change_cipher_spec' : GreedyBytes,
-       'alert' : GreedyBytes,
+     { 'change_cipher_spec' : ChangeCipherSpec,
+       'alert' : Alert,
        'handshake' : Handshake,
        'application_data' : Bytes( this._.clear_text_msg_len ) } ),
 #       'application_data' : Bytes( 4 ) } ),
