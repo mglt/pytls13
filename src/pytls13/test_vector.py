@@ -98,7 +98,10 @@ class TestVector( pylurk.utils.TestVector ):
 #    else: 
 #      key = f"{sender}_{tls_msg.content_type}"
     self.record_bin( descriptor, tls_msg.to_record_layer_bytes() )
-    self.record_val( f"{descriptor}_struct", tls_msg.to_record_layer_struct() )  
+    ## we do not record the struct as it contains bytes which cannot be 
+    ## stored into a JSON object
+    self.record_val( f"{descriptor}_struct", tls_msg.to_record_layer_struct() ) 
+    ## we need to addres this in record_value
     self.record_bin( f"{descriptor}_inner_cipher_text", tls_msg.content )
     self.record_bin( f"{descriptor}_inner_clear_text", inner_clear_text )
 ###    self.record_val( f"{descriptor}_inner_clear_text_struct", inner_clear_text_struct )
@@ -107,6 +110,8 @@ class TestVector( pylurk.utils.TestVector ):
     descriptor = self.descriptor_from_struct( inner_clear_text_struct, sender=sender )
 #    key = f"{sender}_{inner_clear_text_struct[ 'content'][ 'msg_type' ]}"
 
+    ## we do not record the struct as it contains bytes which cannot be 
+    ## stored into a JSON object
     self.record_val( f"{descriptor}_inner_clear_text_struct", inner_clear_text_struct )  
     self.record_bin( f"{descriptor}_inner_clear_text", inner_clear_text )
     self.record_bin( f"{descriptor}_inner_cipher_text", tls_msg.content )

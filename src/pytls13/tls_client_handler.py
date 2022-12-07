@@ -194,8 +194,24 @@ class ClientHello( TLSMsg ):
     self.ks_list = []
     self.ks = None
 
-
+  
   def init_from_test_vector( self,  lurk_client=None, tls_handshake=None, ks=None):
+    """ init from vector has mostly been done to work with the illustarted TLS 1.3 
+      
+    This function has not done intensive testing. Initially, we expected to 
+    test the library against welknown test vectors, but instead we are testing
+    the tls client against with different OpenSSL flavors of TLS. 
+    
+    We leave this part as an initial step for a more extensivve use of 
+    test vectors. 
+
+    Illustrated TLS only works for unauthenticated TLS client.
+    The CS works with freshness set to null.
+
+    There is more work to do to integrate the test_vector 
+    functionality into the more generic way to handle the client hello.
+    
+    """
     self.tls_handshake = tls_handshake 
     self.lurk_client = lurk_client
     self.test_vector =  pytls13.test_vector.TestVector( self.conf[ 'debug' ] )
@@ -212,7 +228,12 @@ class ClientHello( TLSMsg ):
         self.content = self.tls_handshake.msg_list[ -1 ]
         ## 2. Complete ClientHello with response from the CS
         lurk_resp = lurk_client.resp( 'c_init_client_hello', handshake=[ self.content ] )
-        self.c_init_client_hello_update( lurk_resp  )
+        self.c_init_client_hello = True
+#        self.c_init_client_hello_update( lurk_resp  )
+        ephemeral_list = lurk_resp[ 'payload' ][ 'ephemeral_list' ]
+        client_shares = [ eph[ 'key' ] for eph in ephemeral_list ]
+        self.tls_handshake.update_key_share( client_shares )
+        self.tls_handshake.update_random( pylurk.tls13.lurk_tls13.Freshness( self.lurk_client.freshness ) )
       elif self.conf[ 'tls13' ][ 'ephemeral_method' ] == 'e_generated' :
         for ks_entry in client_shares :
           ecdhe_key = pylurk.tls13.crypto_suites.ECDHEKey( )
@@ -221,7 +242,9 @@ class ClientHello( TLSMsg ):
           ecdhe_key.generate_from_pem( self.test_vector.read_bin( key ) )
           self.ecdhe_key_list.append( ecdhe_key )
         self.tls_handshake.msg_list[ -1 ] = self.content
-           
+        self.c_init_client_hello = False
+        ## we do not update the random 
+
   def set_lurk_session_state( self, has_proposed_psk_in_cs ):
     """ determine if a c_init_client_hello is performed 
 

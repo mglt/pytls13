@@ -73,6 +73,7 @@ Now that these issues have been addressed, we may question the usefulness of it 
 This server is listening to port 8400 just start 
 
 ```
+cd illustrated-tls13/server
 ## For a single exchange
 ./server 
 
