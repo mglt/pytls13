@@ -8,7 +8,7 @@ import sys
 sys.path.insert(0, '/home/emigdan/gitlab/pylurk.git/src')
 import pylurk.lurk.lurk_lurk
 #import pylurk.conf 
-import pylurk.utils
+import pylurk.debug
 from pylurk.struct_lurk import LURKMessage
 
 #import pylurk.tls13.struct_tls13
@@ -21,7 +21,7 @@ sys.path.insert(0, '/home/emigdan/gitlab/pytls13/src/') #pytls13
 import pytls13.struct_tls13
 import pytls13.tls_client_handler
 #import pytls13.ciphers
-import pytls13.test_vector
+import pytls13.debug
 import tls_handler
 import pytls13.tls_client_conf
 
@@ -56,7 +56,7 @@ class ClientTLS13Session:
     if self.clt_conf[ 'debug' ][ 'test_vector' ] is True or \
        self.clt_conf[ 'debug' ][ 'trace' ] is True :
       print( f"::Instantiating Test Vector" )
-      self.test_vector =  pytls13.test_vector.TestVector( self.clt_conf[ 'debug' ] )
+      self.test_vector =  pytls13.debug.Debug( self.clt_conf[ 'debug' ] )
       
     ## tls handshake enables msg manipulations 
     ## ks is a useful companion but its instantiate needs 
@@ -204,7 +204,7 @@ class ClientTLS13Session:
                                        inner_tls_msg.content[ 'description' ] )
         elif inner_tls_msg.content_type == 'handshake' :
           if inner_tls_msg.content[ 'msg_type' ] == 'certificate_request':
-            pylurk.utils.print_bin( "built certificate_request", pytls13.struct_tls13.Handshake.build( inner_tls_msg.content ) ) 
+            pylurk.debug.print_bin( "built certificate_request", pytls13.struct_tls13.Handshake.build( inner_tls_msg.content ) ) 
           elif inner_tls_msg.content[ 'msg_type' ] == 'certificate':
             certificate = pytls13.tls_client_handler.Certificate( content=inner_tls_msg.content, sender='server' )
             server_public_key = certificate.get_public_key( )            
