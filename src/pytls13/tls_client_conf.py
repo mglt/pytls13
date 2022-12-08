@@ -8,17 +8,6 @@ import pylurk.conf
 clt_conf = {
   'role' : 'client',
   'description' : "TLS 1.3 Client configuration template",
-#  'type' : 'tls13',
-###  'server' : {
-###    'fqdn' : None,
-###    'ip' : '127.0.0.1',
-####    'port' : 8400 #(debug illustrated TLS1.3)
-####    'port' : 8401 #(debug IdoBn)
-####    'port' : 8402 #(default openssl without authentication)
-###    'port' : 8403 #(default openssl with client authentication (mTLS) )
-####    'port' : 8404 # sajjad (mTLS)
-####
-###  },
   'debug' : {
     'trace' : True,  # prints multiple useful information
     'test_vector' : False,
@@ -27,7 +16,6 @@ clt_conf = {
   },
   'lurk_client' : {
     'freshness' : 'sha256',
-#    'connectivity_type' : 'lib_cs', #'stateless_tcp', # 'lib_cs', # 'stateless_tcp'
     'connectivity' : {
       'type' : 'lib_cs', #'stateless_tcp', # 'lib_cs', # 'stateless_tcp'
       'fqdn' : None,
@@ -53,7 +41,6 @@ clt_conf = {
     ## these values are used for the supported_group (non mandatory) and key_share extension
     'supported_ecdhe_groups' : [ 'x25519' ], #[ 'secp256r1', 'x25519', 'x448' ],
     ### These MUST be provided in the cs configuration part
-#    'tls_client_private_key' : '/home/emigdan/gitlab/pytls13/tests/openssl/client.key',#    'tls_client_certificate_list' : [ '/home/emigdan/gitlab/pytls13/tests/openssl/client.crt']
   },
   ## parameters associated to the cryptographic material being used by
   ## the TLS client.
@@ -64,17 +51,7 @@ clt_conf = {
       'public_key': ['/home/emigdan/gitlab/pytls13/src/pytls13/clt_cs/_Ed25519PublicKey-ed25519-X509.der'],
       'private_key': '/home/emigdan/gitlab/pytls13/src/pytls13/clt_cs/_Ed25519PrivateKey-ed25519-pkcs8.der',
       'sig_scheme': ['ed25519'],
-#      '_cert_type': 'X509',
-#      '_cert_entry_list': [{'cert': b"0\x82\x01!0\x81\xd4\xa0\x03\x02\x01\x02\x02\x14%|u`\xed2\x99\xcd\x18\xc4=\xbdK\x07\xd1\xe2\xdc\xd2\x8e\x180\x05\x06\x03+ep0\x1a1\x180\x16\x06\x03U\x04\x03\x0c\x0fcryptography.io0\x1e\x17\r221205205644Z\x17\r230105205644Z0\x1a1\x180\x16\x06\x03U\x04\x03\x0c\x0fcryptography.io0*0\x05\x06\x03+ep\x03!\x00\xd9\xa4\x03\xfa\x1f\xad'c&\x8d\x80~z\x93+,\xb77B\x9e\xf6\xf7\x06\xb5\r\xfc(\x9fIy\xdcU\xa3,0*0\x1a\x06\x03U\x1d\x11\x04\x130\x11\x82\x0fcryptography.io0\x0c\x06\x03U\x1d\x13\x01\x01\xff\x04\x020\x000\x05\x06\x03+ep\x03A\x00\x844K\x00\xbb\xb2R]\xaf\x96\xa1\x8bW\x0b=Et\xd8\xeajg\x9d\xace\x02p\xbaC\xbb\xa6\xd3\x9a,\xa0K\x17J\xbe\x0b\xd9\xc4\xaaL_\x16\x10|\x8b2.c\xec*\x08\xcc\xee9\x7fu\xcf\xca\xe5\xdc\x00", 'extensions': []}],
-#      '_finger_print_entry_list': [{'finger_print': b'\xec\x86\xfd!', 'extensions': []}],
-#      '_finger_print_dict': {b'\xec\x86\xfd!': b"0\x82\x01!0\x81\xd4\xa0\x03\x02\x01\x02\x02\x14%|u`\xed2\x99\xcd\x18\xc4=\xbdK\x07\xd1\xe2\xdc\xd2\x8e\x180\x05\x06\x03+ep0\x1a1\x180\x16\x06\x03U\x04\x03\x0c\x0fcryptography.io0\x1e\x17\r221205205644Z\x17\r230105205644Z0\x1a1\x180\x16\x06\x03U\x04\x03\x0c\x0fcryptography.io0*0\x05\x06\x03+ep\x03!\x00\xd9\xa4\x03\xfa\x1f\xad'c&\x8d\x80~z\x93+,\xb77B\x9e\xf6\xf7\x06\xb5\r\xfc(\x9fIy\xdcU\xa3,0*0\x1a\x06\x03U\x1d\x11\x04\x130\x11\x82\x0fcryptography.io0\x0c\x06\x03U\x1d\x13\x01\x01\xff\x04\x020\x000\x05\x06\x03+ep\x03A\x00\x844K\x00\xbb\xb2R]\xaf\x96\xa1\x8bW\x0b=Et\xd8\xeajg\x9d\xace\x02p\xbaC\xbb\xa6\xd3\x9a,\xa0K\x17J\xbe\x0b\xd9\xc4\xaaL_\x16\x10|\x8b2.c\xec*\x08\xcc\xee9\x7fu\xcf\xca\xe5\xdc\x00"}
     }
-#      'debug' : {
-#        'trace' : True,  # prints multiple useful information
-#        'test_vector' : False,
-#        'test_vector_file' : '/home/emigdan/gitlab/pytls13/src/pytls13/illustrated_tls13.json',
-#        'test_vector_mode' : 'check', # check / record
-#      }
   }
 }
 
