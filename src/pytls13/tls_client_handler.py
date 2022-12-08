@@ -466,12 +466,14 @@ class ExtKeyShare:
       for group in self.conf[ 'tls13' ][ 'supported_ecdhe_groups' ]:
         ecdhe_key = pylurk.tls13.crypto_suites.ECDHEKey( )
         ecdhe_key.group = group
-        if test_vector is not None:
+        if test_vector is not None and test_vector.test_vector is True:
           key =f"client_{group}_ecdhe_private"
           if key in test_vector.db.keys():
             ecdhe_key.generate_from_pem( test_vector.read_bin( key ) )
           if test_vector.check is True:
-            test_vector.check_bin( ecdhe_key.pkcs8(), test_vector.read_bin( key ) ) 
+            test_vector.check_bin( ecdhe_key.pkcs8(), test_vector.read_bin( key ) )
+        else:
+          ecdhe_key.generate( group )  
         self.ecdhe_key_list.append( ecdhe_key )
       ke_entry_list = [ k.ks_entry() for k in self.ecdhe_key_list ]
 

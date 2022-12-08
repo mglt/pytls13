@@ -2,6 +2,7 @@ import socket
 import binascii
 import secrets 
 import time
+import pprint
 
 import sys
 sys.path.insert(0, '/home/emigdan/gitlab/pylurk.git/src')
@@ -22,6 +23,7 @@ import pytls13.tls_client_handler
 #import pytls13.ciphers
 import pytls13.test_vector
 import tls_handler
+import pytls13.tls_client_conf
 
 from cryptography.hazmat.primitives.hmac import HMAC
 
@@ -34,76 +36,76 @@ This scripts details the case where a TLS client performs a TLS handshake with:
 Such interaction only involves a c_init_client_finished between the TLS Engine (E) and the CS
 """
 
-clt_conf = {
-  'role' : 'client',
-  'type' : 'tls13',
-###  'server' : {
-###    'fqdn' : None,
-###    'ip' : '127.0.0.1',
-####    'port' : 8400 #(debug illustrated TLS1.3)
-####    'port' : 8401 #(debug IdoBn)
-####    'port' : 8402 #(default openssl without authentication)
-###    'port' : 8403 #(default openssl with client authentication (mTLS) )
-####    'port' : 8404 # sajjad (mTLS)
-####   
-###  },
-  'debug' : {
-    'trace' : True,  # prints multiple useful information
-    'test_vector' : False,
-    'test_vector_file' : '/home/emigdan/gitlab/pytls13/src/pytls13/illustrated_tls13.json',
-    'test_vector_mode' : 'check', # check / record
-  },
-  'lurk_client' : {
-    'freshness' : 'sha256', 
-    'connectivity_type' : 'lib_cs', #'stateless_tcp', # 'lib_cs', # 'stateless_tcp'
-    'fqdn' : None, 
-    'ip' : "127.0.0.1", 
-    'port' : 9999,
-    
-  }, 
-  'tls13' : { ## maybe that shoudl be called the engine
-#    'ecdhe_authentication' : True, ## ecdhe indicates certificate based authentication
-    'ke_modes' : [ 'psk_dhe_ke'], ## psk_ke
-    'session_resumption' : True,
-    'post_handshake_authentication' : False,  ## True/False
-    ## sig scheme understood by the TLS Engine to authenticate the Server
-    ## These values are considered by the TLS server to ensure the TLS 
-    ## client will be able to validate the server certificate
-    ## these are NOT reflecting the sig_scheme supported by the CS, 
-    ## which indicates the signature scheme used by the CS.
-    'signature_algorithms' : [ 'rsa_pkcs1_sha256', 'rsa_pkcs1_sha384', 'rsa_pkcs1_sha512', 'ecdsa_secp256r1_sha256', 'ecdsa_secp384r1_sha384', 'ecdsa_secp521r1_sha512', 'rsa_pss_rsae_sha256', 'rsa_pss_rsae_sha384', 'rsa_pss_pss_sha256', 'rsa_pss_pss_sha384', 'rsa_pss_pss_sha256', 'ed25519', 'ed448', 'rsa_pkcs1_sha1' ], 
-    ## configuration of ecdhe requires some synchronization with the cs 
-    ## configuration.
-    ## maybe this may be generated from the CS configuration (or the reverse)
-    'ephemeral_method' : 'cs_generated', ## cs_generated / e_generated when ECDHE is needed. otherwise can be set to 'no_secret' 
-    ## these values are used for the supported_group (non mandatory) and key_share extension 
-    'supported_ecdhe_groups' : [ 'x25519' ], #[ 'secp256r1', 'x25519', 'x448' ],
-    ### These MUST be provided in the cs configuration part
-#    'tls_client_private_key' : '/home/emigdan/gitlab/pytls13/tests/openssl/client.key',
-#    'tls_client_certificate_list' : [ '/home/emigdan/gitlab/pytls13/tests/openssl/client.crt']
-  },
-  ## parameters associated to the cryptographic material being used by 
-  ## the TLS client. 
-  ## When the CS is external, only the certificat enetry list is needed. 
-  ## When the CS is instantiated by the TLS client, it is likely that 
-  'cs' :{ 
-    ( 'tls13', 'v1' ) : { 
-      'public_key': ['/home/emigdan/gitlab/pytls13/src/pytls13/clt_cs/_Ed25519PublicKey-ed25519-X509.der'],
-      'private_key': '/home/emigdan/gitlab/pytls13/src/pytls13/clt_cs/_Ed25519PrivateKey-ed25519-pkcs8.der', 
-      'sig_scheme': ['ed25519'], 
-#      '_cert_type': 'X509', 
-#      '_cert_entry_list': [{'cert': b"0\x82\x01!0\x81\xd4\xa0\x03\x02\x01\x02\x02\x14%|u`\xed2\x99\xcd\x18\xc4=\xbdK\x07\xd1\xe2\xdc\xd2\x8e\x180\x05\x06\x03+ep0\x1a1\x180\x16\x06\x03U\x04\x03\x0c\x0fcryptography.io0\x1e\x17\r221205205644Z\x17\r230105205644Z0\x1a1\x180\x16\x06\x03U\x04\x03\x0c\x0fcryptography.io0*0\x05\x06\x03+ep\x03!\x00\xd9\xa4\x03\xfa\x1f\xad'c&\x8d\x80~z\x93+,\xb77B\x9e\xf6\xf7\x06\xb5\r\xfc(\x9fIy\xdcU\xa3,0*0\x1a\x06\x03U\x1d\x11\x04\x130\x11\x82\x0fcryptography.io0\x0c\x06\x03U\x1d\x13\x01\x01\xff\x04\x020\x000\x05\x06\x03+ep\x03A\x00\x844K\x00\xbb\xb2R]\xaf\x96\xa1\x8bW\x0b=Et\xd8\xeajg\x9d\xace\x02p\xbaC\xbb\xa6\xd3\x9a,\xa0K\x17J\xbe\x0b\xd9\xc4\xaaL_\x16\x10|\x8b2.c\xec*\x08\xcc\xee9\x7fu\xcf\xca\xe5\xdc\x00", 'extensions': []}], 
-#      '_finger_print_entry_list': [{'finger_print': b'\xec\x86\xfd!', 'extensions': []}], 
-#      '_finger_print_dict': {b'\xec\x86\xfd!': b"0\x82\x01!0\x81\xd4\xa0\x03\x02\x01\x02\x02\x14%|u`\xed2\x99\xcd\x18\xc4=\xbdK\x07\xd1\xe2\xdc\xd2\x8e\x180\x05\x06\x03+ep0\x1a1\x180\x16\x06\x03U\x04\x03\x0c\x0fcryptography.io0\x1e\x17\r221205205644Z\x17\r230105205644Z0\x1a1\x180\x16\x06\x03U\x04\x03\x0c\x0fcryptography.io0*0\x05\x06\x03+ep\x03!\x00\xd9\xa4\x03\xfa\x1f\xad'c&\x8d\x80~z\x93+,\xb77B\x9e\xf6\xf7\x06\xb5\r\xfc(\x9fIy\xdcU\xa3,0*0\x1a\x06\x03U\x1d\x11\x04\x130\x11\x82\x0fcryptography.io0\x0c\x06\x03U\x1d\x13\x01\x01\xff\x04\x020\x000\x05\x06\x03+ep\x03A\x00\x844K\x00\xbb\xb2R]\xaf\x96\xa1\x8bW\x0b=Et\xd8\xeajg\x9d\xace\x02p\xbaC\xbb\xa6\xd3\x9a,\xa0K\x17J\xbe\x0b\xd9\xc4\xaaL_\x16\x10|\x8b2.c\xec*\x08\xcc\xee9\x7fu\xcf\xca\xe5\xdc\x00"} 
-    }
-#      'debug' : {
-#        'trace' : True,  # prints multiple useful information
-#        'test_vector' : False,
-#        'test_vector_file' : '/home/emigdan/gitlab/pytls13/src/pytls13/illustrated_tls13.json',
-#        'test_vector_mode' : 'check', # check / record
-#      }
-  }
-}
+##--### clt_conf = {
+##--###   'role' : 'client',
+##--###   'type' : 'tls13',
+##--### ###  'server' : {
+##--### ###    'fqdn' : None,
+##--### ###    'ip' : '127.0.0.1',
+##--### ####    'port' : 8400 #(debug illustrated TLS1.3)
+##--### ####    'port' : 8401 #(debug IdoBn)
+##--### ####    'port' : 8402 #(default openssl without authentication)
+##--### ###    'port' : 8403 #(default openssl with client authentication (mTLS) )
+##--### ####    'port' : 8404 # sajjad (mTLS)
+##--### ####   
+##--### ###  },
+##--###   'debug' : {
+##--###     'trace' : True,  # prints multiple useful information
+##--###     'test_vector' : False,
+##--###     'test_vector_file' : '/home/emigdan/gitlab/pytls13/src/pytls13/illustrated_tls13.json',
+##--###     'test_vector_mode' : 'check', # check / record
+##--###   },
+##--###   'lurk_client' : {
+##--###     'freshness' : 'sha256', 
+##--###     'connectivity_type' : 'lib_cs', #'stateless_tcp', # 'lib_cs', # 'stateless_tcp'
+##--###     'fqdn' : None, 
+##--###     'ip' : "127.0.0.1", 
+##--###     'port' : 9999,
+##--###     
+##--###   }, 
+##--###   'tls13' : { ## maybe that shoudl be called the engine
+##--### #    'ecdhe_authentication' : True, ## ecdhe indicates certificate based authentication
+##--###     'ke_modes' : [ 'psk_dhe_ke'], ## psk_ke
+##--###     'session_resumption' : True,
+##--###     'post_handshake_authentication' : False,  ## True/False
+##--###     ## sig scheme understood by the TLS Engine to authenticate the Server
+##--###     ## These values are considered by the TLS server to ensure the TLS 
+##--###     ## client will be able to validate the server certificate
+##--###     ## these are NOT reflecting the sig_scheme supported by the CS, 
+##--###     ## which indicates the signature scheme used by the CS.
+##--###     'signature_algorithms' : [ 'rsa_pkcs1_sha256', 'rsa_pkcs1_sha384', 'rsa_pkcs1_sha512', 'ecdsa_secp256r1_sha256', 'ecdsa_secp384r1_sha384', 'ecdsa_secp521r1_sha512', 'rsa_pss_rsae_sha256', 'rsa_pss_rsae_sha384', 'rsa_pss_pss_sha256', 'rsa_pss_pss_sha384', 'rsa_pss_pss_sha256', 'ed25519', 'ed448', 'rsa_pkcs1_sha1' ], 
+##--###     ## configuration of ecdhe requires some synchronization with the cs 
+##--###     ## configuration.
+##--###     ## maybe this may be generated from the CS configuration (or the reverse)
+##--###     'ephemeral_method' : 'cs_generated', ## cs_generated / e_generated when ECDHE is needed. otherwise can be set to 'no_secret' 
+##--###     ## these values are used for the supported_group (non mandatory) and key_share extension 
+##--###     'supported_ecdhe_groups' : [ 'x25519' ], #[ 'secp256r1', 'x25519', 'x448' ],
+##--###     ### These MUST be provided in the cs configuration part
+##--### #    'tls_client_private_key' : '/home/emigdan/gitlab/pytls13/tests/openssl/client.key',
+##--### #    'tls_client_certificate_list' : [ '/home/emigdan/gitlab/pytls13/tests/openssl/client.crt']
+##--###   },
+##--###   ## parameters associated to the cryptographic material being used by 
+##--###   ## the TLS client. 
+##--###   ## When the CS is external, only the certificat enetry list is needed. 
+##--###   ## When the CS is instantiated by the TLS client, it is likely that 
+##--###   'cs' :{ 
+##--###     ( 'tls13', 'v1' ) : { 
+##--###       'public_key': ['/home/emigdan/gitlab/pytls13/src/pytls13/clt_cs/_Ed25519PublicKey-ed25519-X509.der'],
+##--###       'private_key': '/home/emigdan/gitlab/pytls13/src/pytls13/clt_cs/_Ed25519PrivateKey-ed25519-pkcs8.der', 
+##--###       'sig_scheme': ['ed25519'], 
+##--### #      '_cert_type': 'X509', 
+##--### #      '_cert_entry_list': [{'cert': b"0\x82\x01!0\x81\xd4\xa0\x03\x02\x01\x02\x02\x14%|u`\xed2\x99\xcd\x18\xc4=\xbdK\x07\xd1\xe2\xdc\xd2\x8e\x180\x05\x06\x03+ep0\x1a1\x180\x16\x06\x03U\x04\x03\x0c\x0fcryptography.io0\x1e\x17\r221205205644Z\x17\r230105205644Z0\x1a1\x180\x16\x06\x03U\x04\x03\x0c\x0fcryptography.io0*0\x05\x06\x03+ep\x03!\x00\xd9\xa4\x03\xfa\x1f\xad'c&\x8d\x80~z\x93+,\xb77B\x9e\xf6\xf7\x06\xb5\r\xfc(\x9fIy\xdcU\xa3,0*0\x1a\x06\x03U\x1d\x11\x04\x130\x11\x82\x0fcryptography.io0\x0c\x06\x03U\x1d\x13\x01\x01\xff\x04\x020\x000\x05\x06\x03+ep\x03A\x00\x844K\x00\xbb\xb2R]\xaf\x96\xa1\x8bW\x0b=Et\xd8\xeajg\x9d\xace\x02p\xbaC\xbb\xa6\xd3\x9a,\xa0K\x17J\xbe\x0b\xd9\xc4\xaaL_\x16\x10|\x8b2.c\xec*\x08\xcc\xee9\x7fu\xcf\xca\xe5\xdc\x00", 'extensions': []}], 
+##--### #      '_finger_print_entry_list': [{'finger_print': b'\xec\x86\xfd!', 'extensions': []}], 
+##--### #      '_finger_print_dict': {b'\xec\x86\xfd!': b"0\x82\x01!0\x81\xd4\xa0\x03\x02\x01\x02\x02\x14%|u`\xed2\x99\xcd\x18\xc4=\xbdK\x07\xd1\xe2\xdc\xd2\x8e\x180\x05\x06\x03+ep0\x1a1\x180\x16\x06\x03U\x04\x03\x0c\x0fcryptography.io0\x1e\x17\r221205205644Z\x17\r230105205644Z0\x1a1\x180\x16\x06\x03U\x04\x03\x0c\x0fcryptography.io0*0\x05\x06\x03+ep\x03!\x00\xd9\xa4\x03\xfa\x1f\xad'c&\x8d\x80~z\x93+,\xb77B\x9e\xf6\xf7\x06\xb5\r\xfc(\x9fIy\xdcU\xa3,0*0\x1a\x06\x03U\x1d\x11\x04\x130\x11\x82\x0fcryptography.io0\x0c\x06\x03U\x1d\x13\x01\x01\xff\x04\x020\x000\x05\x06\x03+ep\x03A\x00\x844K\x00\xbb\xb2R]\xaf\x96\xa1\x8bW\x0b=Et\xd8\xeajg\x9d\xace\x02p\xbaC\xbb\xa6\xd3\x9a,\xa0K\x17J\xbe\x0b\xd9\xc4\xaaL_\x16\x10|\x8b2.c\xec*\x08\xcc\xee9\x7fu\xcf\xca\xe5\xdc\x00"} 
+##--###     }
+##--### #      'debug' : {
+##--### #        'trace' : True,  # prints multiple useful information
+##--### #        'test_vector' : False,
+##--### #        'test_vector_file' : '/home/emigdan/gitlab/pytls13/src/pytls13/illustrated_tls13.json',
+##--### #        'test_vector_mode' : 'check', # check / record
+##--### #      }
+##--###   }
+##--### }
 
 
 
@@ -296,7 +298,7 @@ class ClientTLS13Session:
             server_public_key = certificate.get_public_key( )            
           elif inner_tls_msg.content[ 'msg_type' ] == 'certificate_verify':
             self.tls_handshake.is_certificate_request( )
-            certificate_verify = pytls13.tls_client_handler.CertificateVerify( conf=clt_conf, content=inner_tls_msg.content, sender='server' )
+            certificate_verify = pytls13.tls_client_handler.CertificateVerify( conf=self.clt_conf, content=inner_tls_msg.content, sender='server' )
             certificate_verify.check_signature( self.tls_handshake, server_public_key )
             ## we do update the transcript similarly to the server
             ## but also keep track of the handshake that we will need 
@@ -461,7 +463,8 @@ class SimpleTLS13Client:
     ## TLS client, that is with the connectivity type 'lic_cs'. 
     ## Other types includes a server that is started by another process 
     ## and potentially shared by multiple TLS Clients.
-    if self.conf[ 'lurk_client' ][ 'connectivity_type' ] == 'lib_cs':
+#    if self.conf[ 'lurk_client' ][ 'connectivity_type' ] == 'lib_cs':
+    if self.conf[ 'lurk_client' ][ 'connectivity' ][ 'type' ] == 'lib_cs':
 #      self.cs = pylurk.cs.CryptoService( conf=clt_cs_conf.conf )
       cs_conf = self.generate_lib_cs_conf( self.conf )
       self.cs = pylurk.cs.get_cs_instance( cs_conf )
@@ -480,91 +483,103 @@ class SimpleTLS13Client:
   def generate_lib_cs_conf( self, clt_conf ):
     """ generates the cs configuration from the generic TLS client configuration
 
+    The current configuration is quite large and does not consider all
+    limitations provided by the TLS client configuration.
+    Such limitations may be good when one is srving a given type of TLS clients. 
+    However, in some case, we woudl like to provide some flexibilty in the 
+    TLS client and have a more general purpose CS. 
     """
-    lurk_client_conn_type = clt_conf[ 'lurk_client' ][ 'connectivity_type' ] 
+    lurk_client_conn_type = clt_conf[ 'lurk_client' ][ 'connectivity' ][ 'type' ] 
     if lurk_client_conn_type != 'lib_cs':
       raise ConfigurationError( f"CS configuration is expected to be generated "\
         f"only for lurk_client with connectivity type: {lurk_client_conn_type}" )                          
    ## configuration may consider some elements provided by the TLS client
     if 'cs' in clt_conf.keys():
       init_cs_conf = clt_conf[ 'cs' ]
-    if init_cs_conf is None:
-      init_cs_conf = {}
+##    if init_cs_conf is None:
+##      init_cs_conf = {}
     cs_conf = pylurk.conf.Configuration( )
     ## merging init_cs 
     cs_conf.merge( init_cs_conf )
     cs_conf.set_role( 'client' )
     ## setting / cleaning  connectivity configuration
-    cs_conf.conf[ 'connectivity' ][ 'type' ] = lurk_client_conn_type
-###  if con_type == 'lib_cs' :
-    for k in [ 'fqdn', 'ip_address', 'port' ]:
-      if k in cs_conf.conf[ 'connectivity' ].keys():
-        del cs_conf.conf[ 'connectivity' ][ k ]
-    ## if key material has not been defined we need to generate it
-    ## but we shoudl not overwrite it if the material already exists
-    ## 
-    ## Note 1 that sig_scheme may be derived from the public / private
-    ## keys (except for RSA).
-    ## Note 2 public key can be deribed from the private key
-    ## 
-    ## While the 3 parameters are required to prevent the generation of the 
-    ## the keys, we actually only nee the private or private + sig_scheme
-    ## such refinement ar eleft for future work.
-    ## 
-    ## Note that we consider that these parameters MUST be specified in 
-    ## init_cs_conf and not the template
-    if 'public_key' not in init_cs_conf[ ( 'tls13', 'v1' ) ].keys() or\
-       'private_key' not in init_cs_conf[ ( 'tls13', 'v1' ) ].keys() or\
-       'sig_scheme'  not in init_cs_conf[ ( 'tls13', 'v1' ) ].keys() :
-      if 'sig_scheme' not in init_cs_conf[ ( 'tls13', 'v1' ) ].keys():
-        sig_scheme = 'ed25519'
-      try: 
-        conf_dir = os.path.dirname( init_cs_conf[ 'private_key'] )
-      except: 
-        try:
-          conf_dir = os.path.dirname( init_cs_conf[ 'public_key'] )
-        except:
-          conf_dir = './'
-
-#      cs_conf.set_ecdhe_authentication( sig_scheme, conf_dir = '/home/emigdan/gitlab/pytls13/src/pytls13/clt_cs' )
-      cs_conf.set_ecdhe_authentication( sig_scheme, conf_dir = conf_dir )
-    ## Instantiates the public / privates keys, the certificates, 
-    ## finger prints
-    ## These are necessary to build the Certificate Payload
-    ## 
-    cs_conf.set_extention( ext=( 'tls13', 'v1' ) )
-    ## removing unecessy lurk exchange
-    ## we need to complete this depending on the configuration ( for example
-    ## if there is no session resumption, no post handshake, 
-    for k in cs_conf.conf[ ( 'tls13', 'v1' ) ][ 'type_authorized'] :
-      if ( clt_conf[ 'role' ] == 'client' and k[0:2] == 's_' ) or\
-         ( clt_conf[ 'role' ] == 'server' and k[0:2] == 'c_' ):
-        cs_conf.conf[ ( 'tls13', 'v1' ) ][ 'type_authorized'].remove( k )
-
-    ## setting the debug information. debug parameters may be set 
-    ## generic to the cs or generic to the tls13 extension
-    ## note that the specific configuration for tls13 overwrite
-    # the generic configuration
-    try:  
-      cs_conf.conf[ 'debug' ] = clt_conf[ 'debug' ]
-    except KeyError:
-      pass
-    try: 
-      cs_conf.conf[ ( 'tls13', 'v1' ) ][ 'debug' ] = clt_conf[ 'debug' ]
-    except KeyError:
-      pass
-##
-##    ## setting / cleaning  connectivity configuration
-##    cs_conf.conf[ 'connectivity' ][ 'type' ] = lurk_client_conn_type
-#####  if con_type == 'lib_cs' :
-##    for k in [ 'fqdn', 'ip_address', 'port' ]:
-##      if k in cs_conf.conf[ 'connectivity' ].keys():
-##        del cs_conf.conf[ 'connectivity' ][ k ]
-#####  else:
-#####    for k in [ 'fqdn', 'ip', 'port' ]:
-#####      if k in clt_cs_conf.conf[ 'connectivity' ].keys():
-#####        clt_cs_conf.conf[ 'connectivity' ][ k ] = clt_conf[ 'lurk_client' ][ k ]
-#####  clt_conf[ 'cs' ] = clt_cs_conf.conf
+    cs_conf.set_connectivity( type='lib_cs' )
+    cs_conf.set_tls13_debug( **self.conf[ 'debug' ] )
+    cs_conf.set_tls13_authorization_type( )
+    cs_conf.set_tls13_cs_signing_key( )
+## ##    
+## #### ##    cs_conf.conf[ 'connectivity' ][ 'type' ] = lurk_client_conn_type
+## #### #####  if con_type == 'lib_cs' :
+## #### ##    for k in [ 'fqdn', 'ip_address', 'port' ]:
+## #### ##      if k in cs_conf.conf[ 'connectivity' ].keys():
+## #### ##        del cs_conf.conf[ 'connectivity' ][ k ]
+## ##
+## ##         
+## ##    ## if key material has not been defined we need to generate it
+## ##    ## but we shoudl not overwrite it if the material already exists
+## ##    ## 
+## ##    ## Note 1 that sig_scheme may be derived from the public / private
+## ##    ## keys (except for RSA).
+## ##    ## Note 2 public key can be deribed from the private key
+## ##    ## 
+## ##    ## While the 3 parameters are required to prevent the generation of the 
+## ##    ## the keys, we actually only nee the private or private + sig_scheme
+## ##    ## such refinement ar eleft for future work.
+## ##    ## 
+## ##    ## Note that we consider that these parameters MUST be specified in 
+## ##    ## init_cs_conf and not the template
+## ##    if 'public_key' not in init_cs_conf[ ( 'tls13', 'v1' ) ].keys() or\
+## ##       'private_key' not in init_cs_conf[ ( 'tls13', 'v1' ) ].keys() or\
+## ##       'sig_scheme'  not in init_cs_conf[ ( 'tls13', 'v1' ) ].keys() :
+## ##      if 'sig_scheme' not in init_cs_conf[ ( 'tls13', 'v1' ) ].keys():
+## ##        sig_scheme = 'ed25519'
+## ##      try: 
+## ##        conf_dir = os.path.dirname( init_cs_conf[ 'private_key'] )
+## ##      except: 
+## ##        try:
+## ##          conf_dir = os.path.dirname( init_cs_conf[ 'public_key'] )
+## ##        except:
+## ##          conf_dir = './'
+## ##
+## ###      cs_conf.set_ecdhe_authentication( sig_scheme, conf_dir = '/home/emigdan/gitlab/pytls13/src/pytls13/clt_cs' )
+## ##      cs_conf.set_ecdhe_authentication( sig_scheme, conf_dir = conf_dir )
+## ##    ## Instantiates the public / privates keys, the certificates, 
+## ##    ## finger prints
+## ##    ## These are necessary to build the Certificate Payload
+## ##    ## 
+## ##    cs_conf.set_extention( ext=( 'tls13', 'v1' ) )
+## ##    ## removing unecessy lurk exchange
+## ##    ## we need to complete this depending on the configuration ( for example
+## ##    ## if there is no session resumption, no post handshake, 
+## ##    for k in cs_conf.conf[ ( 'tls13', 'v1' ) ][ 'type_authorized'] :
+## ##      if ( clt_conf[ 'role' ] == 'client' and k[0:2] == 's_' ) or\
+## ##         ( clt_conf[ 'role' ] == 'server' and k[0:2] == 'c_' ):
+## ##        cs_conf.conf[ ( 'tls13', 'v1' ) ][ 'type_authorized'].remove( k )
+## ##
+## ##    ## setting the debug information. debug parameters may be set 
+## ##    ## generic to the cs or generic to the tls13 extension
+## ##    ## note that the specific configuration for tls13 overwrite
+## ##    # the generic configuration
+## ##    try:  
+## ##      cs_conf.conf[ 'debug' ] = clt_conf[ 'debug' ]
+## ##    except KeyError:
+## ##      pass
+## ##    try: 
+## ##      cs_conf.conf[ ( 'tls13', 'v1' ) ][ 'debug' ] = clt_conf[ 'debug' ]
+## ##    except KeyError:
+## ##      pass
+## ####
+## ####    ## setting / cleaning  connectivity configuration
+## ####    cs_conf.conf[ 'connectivity' ][ 'type' ] = lurk_client_conn_type
+## #######  if con_type == 'lib_cs' :
+## ####    for k in [ 'fqdn', 'ip_address', 'port' ]:
+## ####      if k in cs_conf.conf[ 'connectivity' ].keys():
+## ####        del cs_conf.conf[ 'connectivity' ][ k ]
+## #######  else:
+## #######    for k in [ 'fqdn', 'ip', 'port' ]:
+## #######      if k in clt_cs_conf.conf[ 'connectivity' ].keys():
+## #######        clt_cs_conf.conf[ 'connectivity' ][ k ] = clt_conf[ 'lurk_client' ][ k ]
+## #######  clt_conf[ 'cs' ] = clt_cs_conf.conf
     return cs_conf.conf
 
 ####    'port' : 8400 #(debug illustrated TLS1.3)
@@ -592,21 +607,94 @@ if __name__ == "__main__" :
   }
 
   cs_list = {
-
+    'lib_cs' : { 
+      'connectivity' : {
+        'type': 'lib_cs', 
+        }
+      },
+    'tcp_stateless' : {
+      'connectivity' : {
+        'type': 'tcp_stateless',
+        'ip' : '127.0.0.1', 
+        'port' : 9400
+       }
+     }
   }
 
+  ## We should probably probably start here the TLS servers and the CS
+  ## This section assumes the configurations 
+  ## The mandatory parameters to configure the CS are 1) cryptographic 
+  ## and 2) connectivity.
+  ## The  
+  ## 'cs' :{ 
+  ##     'connectivity' : {
+  ##       'type': 'lib_cs' 
+  ##        ...
+  ##       'xxx': 'xxx_value' 
+  ##     }
+  ##     ( 'tls13', 'v1' ) : { 
+  ##       'public_key': ['/home/emigdan/gitlab/pytls13/src/pytls13/clt_cs/_Ed25519PublicKey-ed25519-X509.der'],
+  ##       'private_key': '/home/emigdan/gitlab/pytls13/src/pytls13/clt_cs/_Ed25519PrivateKey-ed25519-pkcs8.der', 
+  ##       'sig_scheme': ['ed25519']
+  ##     }
+  ##  }
+  ## which could also be reduced to : 
+  ## 'cs' :{ 
+  ##     ( 'tls13', 'v1' ) : { 
+  ##       'private_key': '/home/emigdan/gitlab/pytls13/src/pytls13/clt_cs/_Ed25519PrivateKey-ed25519-pkcs8.der', 
+  ##     }
+  ##  }
+  ## The mandatory parameters to configure the TLS Client (the LURK client)
+  ## are :
+  ## 'lurk_client' : {
+  ##   'connectivity' : {
+  ##       'type': 'lib_cs' 
+  ##        ...
+  ##       'xxx': 'xxx_value' 
+  ##    }
+  ##   }
+  ##    'cs' : { 
+#      '_cert_type': 'X509', 
+#      '_cert_entry_list': [ xxx ]
+#      '_finger_print_entry_list': [ ] 
+#      '_finger_print_dict': 
+  ##     } 
+  ## functions that are envisionned:
+  ## configure_cs_crypto ( private_key=None, public_key=None,
+  ##                      'sig_scheme'=None, ca=None )
+  ## configure_tls_client( public_key ) # cert or raw
+  ## configure_lurk_connectivity( )
+  ## We currently have a way to configure CS from TLS client as long 
+  ## as the parameters above are mentionned.
+  ## 
+  ## We should be able to generate
+  ##
+  ## 
+#$$  clt_conf = pytls13.tls_client_conf.clt_conf
+ 
+  conf = pytls13.tls_client_conf.Configuration( )
+  
   for tls_server in tls_server_list.keys():       
     if tls_server == 'illustrated_tls13' : 
-      clt_conf[ 'debug' ][ 'test_vector' ] = True
-      clt_conf[ 'debug' ][ 'test_vector_file' ] = '/home/emigdan/gitlab/pytls13/src/pytls13/illustrated_tls13.json'
-      clt_conf[ 'debug' ][ 'test_vector_mode' ] = 'record' # check / record
-      clt_conf[ 'lurk_client' ][ 'freshness' ] = 'null'
+      conf.set_tls13_debug( trace=True,
+                            test_vector=True, \
+                            test_vector_file = '/home/emigdan/gitlab/pytls13/src/pytls13/illustrated_tls13.json', 
+                            test_vector_mode = 'record' )
+#      clt_conf[ 'debug' ][ 'test_vector' ] = True
+#      clt_conf[ 'debug' ][ 'test_vector_file' ] = '/home/emigdan/gitlab/pytls13/src/pytls13/illustrated_tls13.json'
+#      clt_conf[ 'debug' ][ 'test_vector_mode' ] = 'record' # check / record
+      conf.conf[ 'lurk_client' ][ 'freshness' ] = 'null'
+##      clt_conf[ 'lurk_client' ][ 'freshness' ] = 'null'
       ## there is no session resumption in the case of illustrated TLS 1.3
-      clt_conf[ 'tls13' ][ 'session_resumption' ] = False
+##      clt_conf[ 'tls13' ][ 'session_resumption' ] = False
+      conf.conf[ 'tls13' ][ 'session_resumption' ] = False
     else: 
-      clt_conf[ 'debug' ][ 'test_vector' ] = False
-      clt_conf[ 'tls13' ][ 'session_resumption' ] = True
-      clt_conf[ 'lurk_client' ][ 'freshness' ] = 'sha256'
+      conf.set_tls13_debug( test_vector=False, trace=True )
+#      clt_conf[ 'debug' ][ 'test_vector' ] = False
+      conf.conf[ 'tls13' ][ 'session_resumption' ] = True
+      conf.conf[ 'lurk_client' ][ 'freshness' ] = 'sha256'
+###      clt_conf[ 'tls13' ][ 'session_resumption' ] = True
+###      clt_conf[ 'lurk_client' ][ 'freshness' ] = 'sha256'
 #  for port in [ 8402 ]: #8400] : #, 8402, 8403 ]:
     for ephemeral_method in [ 'cs_generated', 'e_generated' ] :
 ####    'port' : 8400 #(debug illustrated TLS1.3)
@@ -617,21 +705,27 @@ if __name__ == "__main__" :
 #      clt_conf[ 'server' ][ 'port' ] = port
       
 #      ctx = ""
-      clt_conf[ 'tls13' ][ 'ephemeral_method' ] = ephemeral_method
+###      clt_conf[ 'tls13' ][ 'ephemeral_method' ] = ephemeral_method
+      conf.conf[ 'tls13' ][ 'ephemeral_method' ] = ephemeral_method
 #      ctx += f"  - ECDHE {ephemeral_method}"
-      tls_client = SimpleTLS13Client( clt_conf )
-      print( "++==================================================++" )
-      print( f"TLS Client Configuration:\n{clt_conf}" )
-      print( "++==================================================++\n" )
+##      tls_client = SimpleTLS13Client( clt_conf )
+      conf.set_connectivity( **cs_list[ 'lib_cs' ][ 'connectivity' ] )
+
+      tls_client = SimpleTLS13Client( conf.conf )
+      print( "--==================================================--" )
+      print( f"TLS Client Configuration:\n"\
+             f"{pprint.pprint( conf.conf, width=65, sort_dicts=False)}" )
+      print( "--==================================================--\n" )
       print( '\n' )
-      print( "++==================================================++" )
-      print( f"CS Configuration:\n"\
-             f"{tls_client.generate_lib_cs_conf( clt_conf )}" )
-      print( "++==================================================++\n" )
+#      print( "--==================================================--" )
+#      print( f"CS Configuration:\n"\
+#             f"{tls_client.generate_lib_cs_conf( clt_conf )}" )
+#      print( "--==================================================--\n" )
       
       tls_server_param = tls_server_list[ tls_server ]
       ip = tls_server_param[ 'ip' ]
       port = tls_server_param[ 'port' ]
+
       try: 
         sent_data = tls_server_param[ 'sent_data' ] 
       except KeyError:
