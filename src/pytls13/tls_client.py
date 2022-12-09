@@ -52,12 +52,12 @@ class ClientTLS13Session:
     self.s_a_cipher = None
     self.c_a_cipher = None
     self.stream_parser = None
-    self.debug = None 
-    if self.clt_conf[ 'debug' ][ 'test_vector' ] is True or \
-       self.clt_conf[ 'debug' ][ 'trace' ] is True :
-      print( f"::Instantiating Test Vector" )
-      self.debug =  pytls13.debug.Debug( self.clt_conf[ 'debug' ] )
-      
+    self.debug = None
+    if 'debug' in self.clt_conf.keys() :
+      debug = pytls13.debug.Debug( self.clt_conf[ 'debug' ] )
+      if debug.trace is True or debug.test_vector is True:
+        self.debug = debug
+
     ## tls handshake enables msg manipulations 
     ## ks is a useful companion but its instantiate needs 
     ## to know the TLS.Hash which is determined either by PSK or 
@@ -141,13 +141,15 @@ class ClientTLS13Session:
     
     print( f"::Sending ClientHello to the server\n--->" )
     ch = pytls13.tls_client_handler.ClientHello( conf=self.clt_conf )
-    if self.clt_conf[ 'debug' ][ 'test_vector' ] is True:
+#    if self.clt_conf[ 'debug' ][ 'test_vector' ] is True:
+    if self.debug is not None and self.debug.test_vector is True:
       ch.init_from_test_vector( lurk_client=self.lurk_client, tls_handshake=self.tls_handshake, ks=self.ks )
     else:
       ch.init( lurk_client=self.lurk_client, tls_handshake=self.tls_handshake, ks=self.ks, engine_ticket_db=self.engine_ticket_db )
       if self.tls_handshake.is_psk_proposed() is True:
         self.ks = ch.ks
-    self.debug.handle_tls_clear_text_msg( ch, 'client' )
+    if self.debug is not None:
+      self.debug.handle_tls_clear_text_msg( ch, 'client' )
     self.post_hand_auth = self.tls_handshake.is_post_hand_auth_proposed( )  
     self.c_init_client_hello = ch.c_init_client_hello
     self.s.sendall( ch.to_record_layer_bytes() )
@@ -155,8 +157,9 @@ class ClientTLS13Session:
     self.stream_parser = pytls13.tls_client_handler.TLSByteStreamParser( self.s )
     while True:
       tls_msg = self.stream_parser.parse_single_msg( )
-      if tls_msg.content_type == 'handshake': 
-        self.debug.handle_tls_clear_text_msg( tls_msg, sender='server' ) 
+      if tls_msg.content_type == 'handshake':
+        if self.debug is not None:
+          self.debug.handle_tls_clear_text_msg( tls_msg, sender='server' ) 
         if tls_msg.content[ 'msg_type' ] == 'server_hello' : 
           print( "---Receiving ServerHello from the server\n--->" )
           sh = pytls13.tls_client_handler.ServerHello( conf=self.clt_conf )
@@ -165,9 +168,11 @@ class ClientTLS13Session:
         ## generating cipher objects to encrypt / decrypt traffic
         cipher_suite = self.tls_handshake.get_cipher_suite()
         s_h_cipher = pylurk.tls13.crypto_suites.CipherSuite( cipher_suite, self.ks.secrets[ 'h_s' ] )
-        s_h_cipher.debug( self.debug, description='server_handshake' )
+        if self.debug is not None:
+          s_h_cipher.debug( self.debug, description='server_handshake' )
         c_h_cipher = pylurk.tls13.crypto_suites.CipherSuite( cipher_suite, self.ks.secrets[ 'h_c' ] )
-        c_h_cipher.debug( self.debug, description='client_handshake' )
+        if self.debug is not None:
+          c_h_cipher.debug( self.debug, description='client_handshake' )
         ## keep track of the messages for the next lurk request
         ## transcripts are performed at least to check the server finished 
         ## message. Why: The current tls_handshake erases the stored handshake 
@@ -184,7 +189,8 @@ class ClientTLS13Session:
         tmp_handshake = []
       elif tls_msg.content_type == 'change_cipher_spec':
         print( f"--- E <- TLS Server: Receiving ChangeCipherSpec from the server\n--->" )
-        self.debug.handle_tls_clear_text_msg( tls_msg, 'server' ) 
+        if self.debug is not None:
+          self.debug.handle_tls_clear_text_msg( tls_msg, 'server' ) 
         change_cipher_spec = True
       elif tls_msg.content_type == 'application_data' :
         print( f"--- E <- TLS Server: Receiving Application Data from the server\n--->" )
@@ -325,9 +331,11 @@ class ClientTLS13Session:
     client_finished = pytls13.tls_client_handler.Finished( conf=self.clt_conf, content=self.tls_handshake.msg_list[ -1 ], sender='client' )
     client_finished.encrypt_and_send( cipher=c_h_cipher, socket=self.s, sender='client', debug=self.debug ) 
     self.s_a_cipher = pylurk.tls13.crypto_suites.CipherSuite( cipher_suite, self.ks.secrets[ 'a_s' ] )
-    self.s_a_cipher.debug( self.debug, description='server_application' )
+    if self.debug is not None:
+      self.s_a_cipher.debug( self.debug, description='server_application' )
     self.c_a_cipher = pylurk.tls13.crypto_suites.CipherSuite( cipher_suite, self.ks.secrets[ 'a_c' ] )
-    self.c_a_cipher.debug( self.debug, description='client_application' )
+    if self.debug is not None:
+      self.c_a_cipher.debug( self.debug, description='client_application' )
     
   def send( self, data ):    
     print( "--- E -> TLS Server: Sending Data" )
@@ -460,13 +468,12 @@ if __name__ == "__main__" :
   for tls_server in tls_server_list.keys():       
     if tls_server == 'illustrated_tls13' : 
       conf.set_tls13_debug( trace=True,
-                            test_vector=True, \
                             test_vector_file = '/home/emigdan/gitlab/pytls13/src/pytls13/illustrated_tls13.json', 
                             test_vector_mode = 'record' )
       conf.conf[ 'lurk_client' ][ 'freshness' ] = 'null'
       conf.conf[ 'tls13' ][ 'session_resumption' ] = False
     else: 
-      conf.set_tls13_debug( test_vector=False, trace=True )
+      conf.set_tls13_debug( trace=True )
       conf.conf[ 'tls13' ][ 'session_resumption' ] = True
       conf.conf[ 'lurk_client' ][ 'freshness' ] = 'sha256'
     for ephemeral_method in [ 'cs_generated', 'e_generated' ] :

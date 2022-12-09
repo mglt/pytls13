@@ -10,9 +10,10 @@ clt_conf = {
   'description' : "TLS 1.3 Client configuration template",
   'debug' : {
     'trace' : True,  # prints multiple useful information
-    'test_vector' : False,
-    'test_vector_file' : '/home/emigdan/gitlab/pytls13/src/pytls13/illustrated_tls13.json',
-    'test_vector_mode' : 'check', # check / record
+    'test_vector' : {
+      'file' : '/home/emigdan/gitlab/pytls13/src/pytls13/illustrated_tls13.json',
+      'mode' : 'check' # check / record / None
+    },
   },
   'lurk_client' : {
     'freshness' : 'sha256',
@@ -66,12 +67,19 @@ class Configuration( pylurk.conf.Configuration ) :
     self.update_cs_conf( )
 
   def set_tls13_debug( self, **kwargs ):
-    if 'trace' not in kwargs.keys() :
-      kwargs[ 'trace' ] = False
-    if 'test_vector_file' not in kwargs.keys() :
-      kwargs[ 'test_vector_file' ] = None
-      kwargs[ 'test_vector_mode' ] = None
-    self.conf[ 'debug' ] = kwargs
+    debug_conf = {}
+    if 'trace' in kwargs.keys() :
+      debug_conf[ 'trace' ] = kwargs[ 'trace' ]
+    if 'test_vector_file' in kwargs.keys() or 'test_vector_mode' in kwargs.keys():
+      if 'test_vector_file' in kwargs.keys() and 'test_vector_mode' in kwargs.keys():
+        test_vector = {}
+        test_vector[ 'file' ] = kwargs[ 'test_vector_file' ]
+        test_vector[ 'mode' ] = kwargs[ 'test_vector_mode' ]
+        debug_conf[ 'test_vector'] = test_vector
+      else:
+        raise ConfigurationError( f" test_vector_file and test_vector_file"\
+                          f"MUST be present together. {kwargs} ") 
+    self.conf[ 'debug' ] = debug_conf
     self.update_cs_conf( )
 
   def update_cs_conf( self ):

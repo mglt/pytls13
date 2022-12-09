@@ -148,10 +148,11 @@ class TLSMsg:
       socket.sendall( tls_msg.to_record_layer_bytes( ) )
 
 
-  def decrypt_inner_msg( self, cipher, debug ):
+  def decrypt_inner_msg( self, cipher, debug=None ):
     inner_tls_msg = TLSMsg()
     inner_clear_text_struct, inner_clear_text = cipher.decrypt( self.content, debug=True )
-    debug.handle_tls_cipher_text_msg_dec( self, inner_clear_text, inner_clear_text_struct, sender='server' )
+    if debug is not None:
+      debug.handle_tls_cipher_text_msg_dec( self, inner_clear_text, inner_clear_text_struct, sender='server' )
     inner_tls_msg.from_record_layer_struct( inner_clear_text_struct )
     inner_tls_msg.sender = self.sender
     return inner_tls_msg
@@ -193,7 +194,10 @@ class ClientHello( TLSMsg ):
     self.c_init_client_hello = False
     self.ks_list = []
     self.ks = None
-
+   
+    if self.conf is not None:
+      if 'debug' in self.conf.keys() :
+        self.debug = pytls13.debug.Debug( self.conf[ 'debug' ] )   
   
   def init_from_test_vector( self,  lurk_client=None, tls_handshake=None, ks=None):
     """ init from vector has mostly been done to work with the illustarted TLS 1.3 
@@ -214,8 +218,8 @@ class ClientHello( TLSMsg ):
     """
     self.tls_handshake = tls_handshake 
     self.lurk_client = lurk_client
-    self.debug =  pytls13.debug.Debug( self.conf[ 'debug' ] )
-    super().from_test_vector( self.debug.file, 'client_client_hello' )
+#    self.debug =  pytls13.debug.Debug( self.conf[ 'debug' ] )
+    super().from_test_vector( self.debug.test_vector_file, 'client_client_hello' )
     self.tls_handshake.msg_list.append( self.content )
     if self.tls_handshake.is_ks_proposed( ) is True :
       client_shares = self.tls_handshake.get_key_share( 'client' )
@@ -290,7 +294,7 @@ class ClientHello( TLSMsg ):
     ext_list.append( ExtSupportedGroups( self.conf[ 'tls13' ][ 'supported_ecdhe_groups' ] ) )
     key_share = ExtKeyShare( self.conf, self.debug )
     self.ecdhe_key_list = key_share.ecdhe_key_list
-    print( f"self.ecdhe_key_list initialized {self.ecdhe_key_list}" )
+#    print( f"self.ecdhe_key_list initialized {self.ecdhe_key_list}" )
     ext_list.append( key_share )
     if self.conf[ 'tls13' ][ 'post_handshake_authentication' ] is True:
       self.add_ext( ExtPostHandshakeAuthentication() )
@@ -397,10 +401,11 @@ class ClientHello( TLSMsg ):
   def to_record_layer_bytes( self, content_type=None, content=None ):
     record_layer = TLSMsg.to_record_layer_bytes( self, content_type=None, content=None )
     self.record_layer_bytes = record_layer
-    if self.conf[ 'debug'][ 'test_vector' ] is True:
+#    if self.conf[ 'debug'][ 'test_vector' ] is True:
+    if self.debug.test_vector is True:
       tls_msg = TLSMsg()
       key = self.descriptor( sender=self.sender )
-      tls_msg.from_test_vector( self.conf[ 'debug' ][ 'test_vector_file' ], key )
+      tls_msg.from_test_vector( self.debug.test_vector_file, key )
       if record_layer != tls_msg.record_layer_bytes :
         raise ValueError( f"TLS {content_type} message byte mismatch\n"\
        f"sending: {pylurk.debug.bytes_to_str(record_layer)}\n"\
@@ -686,7 +691,7 @@ class ServerHello( ClientHello ):
       eph =  { 'method': 'no_secret', 'key': b'' }
     elif self.tls_mode in [ 'ecdhe', 'psk_ecdhe' ]:
       if ephemeral_method == 'e_generated' :
-        print(f" ch shared_secret: {self.get_shared_secret( client_hello, tls_handshake )}")
+#print(f" ch shared_secret: {self.get_shared_secret( client_hello, tls_handshake )}")
         server_ecdhe_key = pylurk.tls13.crypto_suites.ECDHEKey( )
         server_ecdhe_key.generate_from_ks_entry( tls_handshake.get_key_share( 'server' ) )
         eph = { 'method': 'e_generated', 
@@ -878,9 +883,9 @@ class CertificateVerify( TLSMsg ):
     handshake_msg_list, server_cert, client_cert = \
       self.get_cert_from_handshake_msg_list( handshake_msg_list )
    
-    print( f"--- handshake_msg_list: {handshake_msg_list}" )
-    print( f"--- server_cert: {server_cert}" ) 
-    print( f"--- client_cert: {client_cert}" ) 
+#    print( f"--- handshake_msg_list: {handshake_msg_list}" )
+#    print( f"--- server_cert: {server_cert}" ) 
+#    print( f"--- client_cert: {client_cert}" ) 
     lurk_resp = lurk_client.resp( 'c_init_client_finished', \
                               last_exchange=last_exchange, \
                               handshake=handshake_msg_list, \
@@ -921,7 +926,7 @@ class Certificate( TLSMsg ):
   def get_public_key( self ):
 
     ## we shoudl reuse load_public_bytes from conf.
-    print( f"--- content: {self.content[ 'data' ][ 'certificate_list' ][ 0 ]}" )
+#    print( f"--- content: {self.content[ 'data' ][ 'certificate_list' ][ 0 ]}" )
     public_bytes = self.content[ 'data' ][ 'certificate_list' ][ 0 ][ 'cert' ]
     try:
       cert = x509.load_der_x509_certificate( public_bytes )
