@@ -383,20 +383,29 @@ class SimpleTLS13Client:
   def __init__( self, conf ):
     self.conf = conf
     self.cs = None
-    ## Instantiates a CS only when CS is specified as instantiated by the 
-    ## TLS client, that is with the connectivity type 'lic_cs'. 
-    ## Other types includes a server that is started by another process 
-    ## and potentially shared by multiple TLS Clients.
-#    if self.conf[ 'lurk_client' ][ 'connectivity_type' ] == 'lib_cs':
-    if self.conf[ 'lurk_client' ][ 'connectivity' ][ 'type' ] == 'lib_cs':
-#      self.cs = pylurk.cs.CryptoService( conf=clt_cs_conf.conf )
-      cs_conf = self.generate_lib_cs_conf( self.conf )
-      self.cs = pylurk.cs.get_cs_instance( cs_conf )
-      for k in [ '_cert_entry_list',  '_cert_type',  \
-                 '_finger_print_entry_list', '_finger_print_dict'  ]:
-        self.conf[ 'cs' ][ ( 'tls13', 'v1' ) ][ k ] = \
-          cs_conf[ ( 'tls13', 'v1' ) ] [ k ]  
-#      self.cs = pylurk.cs.get_cs_instance( self.conf[ 'cs' ] )
+    clt_conf = pytls13.tls_client_conf.Configuration( )
+    clt_conf.update_cs_conf( )
+    self.conf = clt_conf.conf 
+    self.cs = pylurk.cs.get_cs_instance( self.conf[ 'cs' ] )
+
+###    ##DEBUG BEGIN:
+###    ## configuration has been replace dby the update_cs_conf
+###
+###    ## Instantiates a CS only when CS is specified as instantiated by the 
+###    ## TLS client, that is with the connectivity type 'lic_cs'. 
+###    ## Other types includes a server that is started by another process 
+###    ## and potentially shared by multiple TLS Clients.
+#########    if self.conf[ 'lurk_client' ][ 'connectivity_type' ] == 'lib_cs':
+###    if self.conf[ 'lurk_client' ][ 'connectivity' ][ 'type' ] == 'lib_cs':
+########      self.cs = pylurk.cs.CryptoService( conf=clt_cs_conf.conf )
+###      cs_conf = self.generate_lib_cs_conf( self.conf )
+###      self.cs = pylurk.cs.get_cs_instance( cs_conf )
+###      for k in [ '_cert_entry_list',  '_cert_type',  \
+###                 '_finger_print_entry_list', '_finger_print_dict'  ]:
+###        self.conf[ 'cs' ][ ( 'tls13', 'v1' ) ][ k ] = \
+###          cs_conf[ ( 'tls13', 'v1' ) ] [ k ]  
+########      self.cs = pylurk.cs.get_cs_instance( self.conf[ 'cs' ] )
+###    ## DEBUG: END
     self.engine_ticket_db = pytls13.tls_client_handler.EngineTicketDB()
     
   def new_session( self ):
@@ -443,7 +452,7 @@ if __name__ == "__main__" :
          'trace' : True,
          'test_vector' : {
            'file' :  '/home/emigdan/gitlab/pytls13/src/pytls13/illustrated_tls13.json', 
-           'mode' : 'record'
+           'mode' : 'check'
            },
          },
        'lurk_client' : {
@@ -484,16 +493,16 @@ if __name__ == "__main__" :
         'type': 'lib_cs', 
         }
       },
-    'illustrated_tls13_tcp_stateless' : {
+    'illustrated_tls13_stateless_tcp' : {
       'connectivity' : {
-        'type': 'tcp_stateless',
+        'type': 'stateless_tcp',
         'ip' : '127.0.0.1', 
         'port' : 9400
        }
      },
-    'tcp_stateless' : {
+    'stateless_tcp' : {
       'connectivity' : {
-        'type': 'tcp_stateless',
+        'type': 'stateless_tcp',
         'ip' : '127.0.0.1', 
         'port' : 9401
        }
@@ -517,7 +526,14 @@ if __name__ == "__main__" :
   ## template.
   
   for tls_server in tls_server_list.keys():
-    for cs in [ list( cs_list.keys() ) [ 0 ] ]:
+#    for cs in [ list( cs_list.keys() ) [ 0 ] ]:
+    for cs in cs_list.keys():
+      if tls_server ==  'illustrated_tls13' and cs == 'stateless_tcp' :
+        continue
+      if tls_server in [ 'openssl_uclient', 'openssl_auth_client' ]  and\
+         cs == 'illustrated_tls13_stateless_tcp':
+        continue
+      
       for ephemeral_method in [ 'cs_generated', 'e_generated' ] :
    
         ## generating a coherent clt_conf to be passed as an input
@@ -541,6 +557,7 @@ if __name__ == "__main__" :
 #        print( f" -o-3.6 after merge conf.conf (check): {conf.conf}\n" )
         if cs_list[ cs ][ 'connectivity' ][ 'type' ] == 'lib_cs':
           conf.update_cs_conf( )
+        conf.update_cs_conf( )
 #        print( f" -o-4 check final conf (check): {clt_conf}\n" )
 #        print( f" -o-5 check final (after cs_update)conf (check): {conf.conf}\n" )
 #        print( f"\n =======================================================\n" )
@@ -559,11 +576,11 @@ if __name__ == "__main__" :
 #    for ephemeral_method in [ 'cs_generated', 'e_generated' ] :
 #      conf.conf[ 'tls13' ][ 'ephemeral_method' ] = ephemeral_method
 #      conf.set_connectivity( **cs_list[ 'lib_cs' ][ 'connectivity' ] )
-
+        
         tls_client = SimpleTLS13Client( conf.conf )
         print( "--==================================================--" )
-        print( f"TLS Client Configuration:\n"\
-               f"{pprint.pprint( conf.conf, width=65, sort_dicts=False)}" )
+        print( "TLS Client Configuration:")
+        pprint.pprint( conf.conf, width=65, sort_dicts=False)
         print( "--==================================================--\n" )
         print( '\n' )
         

@@ -139,10 +139,13 @@ class Configuration( pylurk.conf.Configuration ) :
     init_cs_conf = {}
     if 'cs' in self.conf.keys():
       init_cs_conf = self.conf[ 'cs' ]
+    print( f" --- init_cs_conf: {init_cs_conf}" )
     ## merging init_cs 
     self.cs_conf.merge( init_cs_conf )
     lurk_client_connectivity = self.conf[ 'lurk_client' ][ 'connectivity' ]
+    print( f" --- lurk_client_connectivity: {lurk_client_connectivity}" )
     if lurk_client_connectivity[ 'type' ] == 'lib_cs' :
+      ## in that modul this is the only possibility
       self.cs_conf.set_role( 'client' )
       ## setting / cleaning  connectivity configuration
 ##      self.cs_conf.set_connectivity( **self.conf[ 'lurk_client' ][ 'connectivity' ] ) 
@@ -151,12 +154,13 @@ class Configuration( pylurk.conf.Configuration ) :
 #      self.cs_conf.set_tls13_debug( **self.conf[ 'debug' ] ) 
       self.cs_conf.set_tls13_authorization_type( )
       self.cs_conf.set_tls13_cs_signing_key( )
+      self.conf[ 'cs' ] = self.cs_conf.conf
     else:
       ## cleaning unnecessary parameters
       self.cs_conf.set_tls13_cs_public_signing_key( )
       tmp_cs_conf = { ( 'tls13', 'v1' )  : { } }
       for k in [ 'public_key', '_public_key',  '_cert_type', '_cert_entry_list',\
                  '_finger_print_entry_list', '_finger_print_dict' ] :
-        tmp_cs_conf[ k ] = self.cs_conf.conf[ ( 'tls13', 'v1' ) ][ k ]
-    self.conf[ 'cs' ] = self.cs_conf.conf
+        tmp_cs_conf[ ( 'tls13', 'v1' ) ][ k ] = self.cs_conf.conf[ ( 'tls13', 'v1' ) ][ k ]
+      self.conf[ 'cs' ] = tmp_cs_conf
 
