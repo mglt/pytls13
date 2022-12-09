@@ -43,7 +43,7 @@ class Debug( pylurk.debug.Debug ):
     descriptor = self.descriptor_from_struct( inner_clear_text_struct, sender=sender )
     ## we do not record the struct as it contains bytes which cannot be 
     ## stored into a JSON object
-    self.record_val( f"{descriptor}_inner_clear_text_struct", inner_clear_text_struct )  
+    ## self.record_val( f"{descriptor}_inner_clear_text_struct", inner_clear_text_struct )  
     self.record_bin( f"{descriptor}_inner_clear_text", inner_clear_text )
     self.record_bin( f"{descriptor}_inner_cipher_text", tls_msg.content )
     self.record_bin( descriptor, tls_msg.to_record_layer_bytes() )
