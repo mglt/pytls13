@@ -411,32 +411,32 @@ class SimpleTLS13Client:
   def new_session( self ):
     return ClientTLS13Session( self.conf, self.engine_ticket_db, self.cs )
 
-  def generate_lib_cs_conf( self, clt_conf ):
-    """ generates the cs configuration from the generic TLS client configuration
-
-    The current configuration is quite large and does not consider all
-    limitations provided by the TLS client configuration.
-    Such limitations may be good when one is srving a given type of TLS clients. 
-    However, in some case, we woudl like to provide some flexibilty in the 
-    TLS client and have a more general purpose CS. 
-    """
-    lurk_client_conn_type = clt_conf[ 'lurk_client' ][ 'connectivity' ][ 'type' ] 
-    if lurk_client_conn_type != 'lib_cs':
-      raise ConfigurationError( f"CS configuration is expected to be generated "\
-        f"only for lurk_client with connectivity type: {lurk_client_conn_type}" )                          
-   ## configuration may consider some elements provided by the TLS client
-    if 'cs' in clt_conf.keys():
-      init_cs_conf = clt_conf[ 'cs' ]
-    cs_conf = pylurk.conf.Configuration( )
-    ## merging init_cs 
-    cs_conf.merge( init_cs_conf )
-    cs_conf.set_role( 'client' )
-    ## setting / cleaning  connectivity configuration
-    cs_conf.set_connectivity( type='lib_cs' )
-    cs_conf.set_tls13_debug( **self.conf[ 'debug' ] )
-    cs_conf.set_tls13_authorization_type( )
-    cs_conf.set_tls13_cs_signing_key( )
-    return cs_conf.conf
+#  def generate_lib_cs_conf( self, clt_conf ):
+#    """ generates the cs configuration from the generic TLS client configuration
+#
+#    The current configuration is quite large and does not consider all
+#    limitations provided by the TLS client configuration.
+#    Such limitations may be good when one is srving a given type of TLS clients. 
+#    However, in some case, we woudl like to provide some flexibilty in the 
+#    TLS client and have a more general purpose CS. 
+#    """
+#    lurk_client_conn_type = clt_conf[ 'lurk_client' ][ 'connectivity' ][ 'type' ] 
+#    if lurk_client_conn_type != 'lib_cs':
+#      raise ConfigurationError( f"CS configuration is expected to be generated "\
+#        f"only for lurk_client with connectivity type: {lurk_client_conn_type}" )                          
+#   ## configuration may consider some elements provided by the TLS client
+#    if 'cs' in clt_conf.keys():
+#      init_cs_conf = clt_conf[ 'cs' ]
+#    cs_conf = pylurk.conf.Configuration( )
+#    ## merging init_cs 
+#    cs_conf.merge( init_cs_conf )
+#    cs_conf.set_role( 'client' )
+#    ## setting / cleaning  connectivity configuration
+#    cs_conf.set_connectivity( type='lib_cs' )
+#    cs_conf.set_tls13_debug( **self.conf[ 'debug' ] )
+#    cs_conf.set_tls13_authorization_type( )
+#    cs_conf.set_tls13_cs_signing_key( )
+#    return cs_conf.conf
 
 if __name__ == "__main__" :
   tls_server_list = { \
