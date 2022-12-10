@@ -823,7 +823,7 @@ class CertificateVerify( TLSMsg ):
     try: 
       algorithm = self.conf[ 'cs' ][ ( 'tls13', 'v1' ) ][ 'sig_scheme' ][ 0 ]
     except KeyError:
-      algorithm = None
+      raise pylurk.lurk.lurk_lurk.ConfigurationError( f"Cannot find sig_scheme in conf: {self.conf}" )
     self.content = {
       'msg_type' : 'certificate_verify',
       'data' : { 'algorithm' : algorithm,

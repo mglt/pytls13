@@ -80,36 +80,14 @@ class Configuration( pylurk.conf.Configuration ) :
       ## When the CS is instantiated by the TLS client, it is likely that
       'cs' :{
         ( 'tls13', 'v1' ) : {
-          'public_key': ['/home/emigdan/gitlab/pytls13/src/pytls13/clt_cs/_Ed25519PublicKey-ed25519-X509.der'],
-          'private_key': '/home/emigdan/gitlab/pytls13/src/pytls13/clt_cs/_Ed25519PrivateKey-ed25519-pkcs8.der',
+#          'public_key': ['/home/emigdan/gitlab/pytls13/src/pytls13/clt_cs/_Ed25519PublicKey-ed25519-X509.der'],
+#          'private_key': '/home/emigdan/gitlab/pytls13/src/pytls13/clt_cs/_Ed25519PrivateKey-ed25519-pkcs8.der',
           'sig_scheme': ['ed25519'],
         }
       }
     }
-#    self.conf = conf
     self.cs_conf = pylurk.conf.Configuration( )
     
-##  def set_connectivity( self, **kwargs ):
-##    self.conf[ 'lurk_client' ][ 'connectivity' ] = kwargs
-##    self.update_cs_conf( )
-##
-##  def set_tls13_debug( self, debug_conf ):
-##   
-##    debug_conf = {}
-##    if 'trace' in kwargs.keys() :
-##      debug_conf[ 'trace' ] = kwargs[ 'trace' ]
-##    if 'test_vector_file' in kwargs.keys() or 'test_vector_mode' in kwargs.keys():
-##      if 'test_vector_file' in kwargs.keys() and 'test_vector_mode' in kwargs.keys():
-##        test_vector = {}
-##        test_vector[ 'file' ] = kwargs[ 'test_vector_file' ]
-##        test_vector[ 'mode' ] = kwargs[ 'test_vector_mode' ]
-##        debug_conf[ 'test_vector'] = test_vector
-##      else:
-##        raise ConfigurationError( f" test_vector_file and test_vector_file"\
-##                          f"MUST be present together. {kwargs} ") 
-##    self.conf[ 'debug' ] = debug_conf
-##    self.update_cs_conf( )
-
   def update_cs_conf( self ):
     """ derives the cs configuration from the tls client's configuration
 
@@ -159,8 +137,9 @@ class Configuration( pylurk.conf.Configuration ) :
       ## cleaning unnecessary parameters
       self.cs_conf.set_tls13_cs_public_signing_key( )
       tmp_cs_conf = { ( 'tls13', 'v1' )  : { } }
-      for k in [ 'public_key', '_public_key',  '_cert_type', '_cert_entry_list',\
-                 '_finger_print_entry_list', '_finger_print_dict' ] :
+      for k in [ 'public_key', 'sig_scheme', '_public_key',  '_cert_type', \
+                 '_cert_entry_list', '_finger_print_entry_list', \
+                 '_finger_print_dict' ] :
         tmp_cs_conf[ ( 'tls13', 'v1' ) ][ k ] = self.cs_conf.conf[ ( 'tls13', 'v1' ) ][ k ]
       self.conf[ 'cs' ] = tmp_cs_conf
 
