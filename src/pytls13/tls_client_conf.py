@@ -1,7 +1,7 @@
 import copy
 
-import sys 
-sys.path.insert(0, '/home/emigdan/gitlab/pylurk.git/src')
+#import sys 
+#sys.path.insert(0, '/home/emigdan/gitlab/pylurk.git/src')
 import pylurk.conf 
 
 

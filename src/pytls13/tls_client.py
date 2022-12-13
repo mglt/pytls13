@@ -7,24 +7,19 @@ import copy
 import os.path
 
 import sys
-sys.path.insert(0, '/home/emigdan/gitlab/pylurk.git/src')
 import pylurk.lurk.lurk_lurk
-#import pylurk.conf 
 import pylurk.debug
 from pylurk.struct_lurk import LURKMessage
 
-#import pylurk.tls13.struct_tls13
 import pylurk.tls13.lurk_tls13
 import pylurk.tls13.crypto_suites
 import pylurk.lurk_client
 import pylurk.cs
 
-sys.path.insert(0, '/home/emigdan/gitlab/pytls13/src/') #pytls13
 import pytls13.struct_tls13
 import pytls13.tls_client_handler
-#import pytls13.ciphers
 import pytls13.debug
-import tls_handler
+import pytls13.tls_handler
 import pytls13.tls_client_conf
 
 from cryptography.hazmat.primitives.hmac import HMAC
@@ -163,7 +158,7 @@ class ClientTLS13Session:
         if self.debug is not None:
           self.debug.handle_tls_clear_text_msg( tls_msg, sender='server' ) 
         if tls_msg.content[ 'msg_type' ] == 'server_hello' : 
-          print( "---Receiving ServerHello from the server\n--->" )
+          print( "--- Receiving ServerHello from the server\n--->" )
           sh = pytls13.tls_client_handler.ServerHello( conf=self.clt_conf )
           self.ks = sh.handle_server_hello( self.lurk_client, ch, self.tls_handshake, self.ks, tls_msg ) 
           self.c_register_tickets = sh.c_register_tickets
@@ -398,174 +393,3 @@ class SimpleTLS13Client:
   def new_session( self ):
     return ClientTLS13Session( self.conf, self.engine_ticket_db, self.cs )
 
-
-### if __name__ == "__main__" :
-###   tls_server_list = { \
-### #    'illustrated_tls13' : {
-### #       'description' : f"  - Illustrated TLS1.3 Server\n"\
-### #                       f"   - unauthenticated client\n", 
-### #       'destination' : {
-### #         'ip' : '127.0.0.1', 
-### #         'port' : 8400,
-### #       },
-### #       'sent_data' : b'ping', 
-### #       'debug' : {
-### #         'trace' : True,
-### #         'test_vector' : {
-### #           'file' :  '/home/emigdan/gitlab/pytls13/src/pytls13/illustrated_tls13.json', 
-### #           'mode' : 'check'
-### #           },
-### #         },
-### #       'lurk_client' : {
-### #         'freshness' : 'null'
-### #         },
-### #       'tls13': {
-### #         'session_resumption' : False
-### #       },
-### #     }, 
-###      'openssl_uclient' : {
-###        'destination' : {
-###          'ip' : '127.0.0.1', 
-###          'port' : 8402, 
-###        }, 
-###        'debug' : {
-###           'trace' : True
-###        },
-###        'tls13' : {
-###          'session_resumption' : False
-###        }, 
-###        'description' : f"  - OpenSSL TLS1.3 Server\n"\
-###                        f"  - unauthenticated client\n" }, 
-###      'openssl_auth_client' : {
-###        'destination' : {
-###          'ip' : '127.0.0.1', 
-###          'port' : 8403
-###        },
-###        'debug' : {
-###           'trace' : True
-###        },
-###        'description' : f"  - OpenSSL TLS1.3 Server\n"\
-###                        f"  - authenticated client\n" }, 
-###   }
-### 
-###   conf_dir = '/home/emigdan/gitlab/pytls13/src/pytls13/clt_cs/'
-###   cs_list = {
-###     'lib_cs' : { 
-###       'connectivity' : {
-###         'type': 'lib_cs', 
-###         },
-###        'cs' : {
-###          ( 'tls13', 'v1' ) : {
-###            'public_key' : [ os.path.join( conf_dir, '_Ed25519PublicKey-ed25519-X509.der' ) ],
-###            'private_key': os.path.join( conf_dir, '_Ed25519PrivateKey-ed25519-pkcs8.der' ),
-###            'sig_scheme': ['ed25519']
-###          }
-###       }
-###     },
-###     'illustrated_tls12_stateless_tcp' : {
-###       'connectivity' : {
-###         'type': 'stateless_tcp',
-###         'ip' : '127.0.0.1', 
-###         'port' : 9400
-###        }
-###      },
-###     'stateless_tcp' : {
-###       'connectivity' : {
-###         'type': 'stateless_tcp',
-###         'ip' : '127.0.0.1', 
-###         'port' : 9401
-###        }, 
-###        'cs' : {
-###          ( 'tls13', 'v1' ) : {
-###            'public_key' : [ os.path.join( conf_dir, '_Ed25519PublicKey-ed25519-X509.der' ) ],
-###            'sig_scheme': ['ed25519']
-###          }
-###        }
-###      }
-###   }
-### 
-###   ## The configuration is acomplished the following way:
-###   ## 1. set a configuration that has the same structure as the 
-###   ## tls_client_cong.Configuration template. 
-###   ## As many parameters can have a default value, only provide 
-###   ## those that are necessary.
-###   ## It is recommended to have the smallest subset so the full 
-###   ## configuration can be generated automatically and ensure 
-###   ## the coherence of the data being provided. 
-###   ## 2. Use tls_client_cong.Configuration to generate the full 
-###   ## configuration structure. 
-###   ## 
-###   for tls_server in tls_server_list.keys():
-### #    for cs in [ list( cs_list.keys() ) [ 0 ] ]:
-###     for cs in cs_list.keys():
-###       if tls_server ==  'illustrated_tls13' and cs == 'stateless_tcp' :
-###         continue
-###       if tls_server in [ 'openssl_uclient', 'openssl_auth_client' ]  and\
-###          cs == 'illustrated_tls13_stateless_tcp':
-###         continue
-###       
-###       for ephemeral_method in [ 'cs_generated', 'e_generated' ] :
-###         ## generating a coherent clt_conf to be passed as an input
-###         ## to generate the full configuration
-###         clt_conf = tls_server_list[ tls_server ]
-###         if 'lurk_client' not  in clt_conf:
-###           clt_conf[ 'lurk_client' ] = {}
-###         clt_conf[ 'lurk_client' ][ 'connectivity' ] = cs_list[ cs ][ 'connectivity' ]
-###         if 'tls13' not in clt_conf.keys() :
-###           clt_conf[ 'tls13' ] = {}
-###         clt_conf[ 'tls13' ][ 'ephemeral_method' ] = ephemeral_method
-###         ## When test_vector are used, keys are not considered
-###         if 'cs' in cs_list[ cs ].keys() : 
-###           clt_conf[ 'cs' ] = cs_list[ cs ][ 'cs' ]
-###         print( f" -- clt_conf : {clt_conf}" )
-### #        #with pytls13.tls_client_conf.Configuration( ) as conf:
-### #        ## generating the full configuration
-### #        conf = pytls13.tls_client_conf.Configuration( )
-### #        conf.merge( clt_conf )
-### ##        if cs_list[ cs ][ 'connectivity' ][ 'type' ] == 'lib_cs':
-### ##          conf.update_cs_conf( )
-### #        print( f" -- merge : {conf.conf}" )
-### #        conf.update_cs_conf( )
-### #        print( f" -- update : {conf.conf}" )
-###         
-###         tls_client = SimpleTLS13Client( clt_conf )
-###         print( "--==================================================--" )
-###         print( "TLS Client Configuration:")
-###         pprint.pprint( tls_client.conf, width=65, sort_dicts=False)
-###         print( "--==================================================--\n" )
-###         print( '\n' )
-###         
-###         tls_server_param = tls_server_list[ tls_server ][ 'destination' ]
-###         ip = tls_server_param[ 'ip' ]
-###         port = tls_server_param[ 'port' ]
-###       
-###         try: 
-###           sent_data = tls_server_param[ 'sent_data' ] 
-###         except KeyError:
-###           sent_data = b'GET /index.html' 
-###       
-###         print( '\n' )
-###         print( "++==================================================++" )
-###         print( f"{tls_client.conf[ 'description' ]}\n"\
-###                f"  - ECDHE {ephemeral_method}" )
-###         print( "++==================================================++\n" )
-###         print( '\n' )
-###         print( "======================================================" )
-###         print( "========= TLS with certificate authentication ========" )
-###         print( "======================================================\n" )
-###         session = tls_client.new_session( )
-###         session.connect( ip=ip, port=port )
-###         session.send( sent_data )
-###         print( f"APPLICATION DATA - [cert]: {session.recv()}" )
-###         if tls_server == 'illustrated_tls13' :
-###           time.sleep( 2)
-###           continue
-###       
-###         print( "======================================================" )
-###         print( "============= TLS with PSK authentication ============" )
-###         print( "======================================================\n" )
-###         session = tls_client.new_session( )
-###         session.connect( ip=ip, port=port )
-###         session.send( sent_data )
-###         print( f"APPLICATION DATA - [psk]: {session.recv()}" )
-  

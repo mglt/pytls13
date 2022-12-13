@@ -1,6 +1,3 @@
-#import sys
-#sys.path.insert(0, './../src/')
-## import socket 
 import secrets 
 import pprint
 import binascii
@@ -19,19 +16,14 @@ from cryptography.x509.oid import NameOID
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.hashes import Hash, SHA256, SHA384, SHA512
 
-import sys
-sys.path.insert(0, '/home/emigdan/gitlab/pytls13/src/')
-import pytls13.struct_tls13 as tls
-import pytls13.debug
-sys.path.insert(0, '/home/emigdan/gitlab/pylurk.git/src')
 import pylurk.lurk.lurk_lurk
 import pylurk.tls13.struct_tls13 as lurk
-#import pylurk.tls13.lurk_tls13
 import pylurk.tls13.lurk_tls13 
-#import pylurk.conf 
 import pylurk.debug
 import pylurk.cs 
 
+import pytls13.struct_tls13 as tls
+import pytls13.debug
 
 
 class TLSMsg:
@@ -124,7 +116,7 @@ class TLSMsg:
   def show( self, content_type=None, content=None ):
     self.record_layer_bytes = self.to_record_layer_bytes( content_type=content_type, content=content )
     pylurk.debug.print_bin( "", self.record_layer_bytes ) 
-    print ( f"  - (struct) : {tls.TLSPlaintext.parse( self.record_layer_bytes )}" )
+#    print ( f"  - (struct) : {tls.TLSPlaintext.parse( self.record_layer_bytes )}" )
   
   def add_ext( self, ext_list ) :
     for ext in ext_list:
@@ -277,7 +269,6 @@ class ClientHello( TLSMsg ):
       'data' : {\
         'legacy_version' : b'\x03\x03',
         'random' : self.init_random,
-#        'legacy_session_id' : secrets.token_bytes( 32 ),
         'legacy_session_id' : secrets.token_bytes( 32 ),
         'cipher_suites' : ['TLS_AES_128_GCM_SHA256', 'TLS_CHACHA20_POLY1305_SHA256'],
         'legacy_compression_methods' : b'\x00',
@@ -294,7 +285,6 @@ class ClientHello( TLSMsg ):
     ext_list.append( ExtSupportedGroups( self.conf[ 'tls13' ][ 'supported_ecdhe_groups' ] ) )
     key_share = ExtKeyShare( self.conf, self.debug )
     self.ecdhe_key_list = key_share.ecdhe_key_list
-#    print( f"self.ecdhe_key_list initialized {self.ecdhe_key_list}" )
     ext_list.append( key_share )
     if self.conf[ 'tls13' ][ 'post_handshake_authentication' ] is True:
       self.add_ext( ExtPostHandshakeAuthentication() )
@@ -691,7 +681,6 @@ class ServerHello( ClientHello ):
       eph =  { 'method': 'no_secret', 'key': b'' }
     elif self.tls_mode in [ 'ecdhe', 'psk_ecdhe' ]:
       if ephemeral_method == 'e_generated' :
-#print(f" ch shared_secret: {self.get_shared_secret( client_hello, tls_handshake )}")
         server_ecdhe_key = pylurk.tls13.crypto_suites.ECDHEKey( )
         server_ecdhe_key.generate_from_ks_entry( tls_handshake.get_key_share( 'server' ) )
         eph = { 'method': 'e_generated', 
@@ -741,7 +730,7 @@ class Finished( ClientHello ):
     ## compute the non sender certificate_verify 
     if self.sender == 'server':
       c_verify_data = tls_handshake.get_verify_data( ks, role='server',\
-                      transcript_mode='finished') 
+                      transcript_mode='server finished') 
       s_verify_data =  self.content[ 'data' ][ 'verify_data' ]
       pylurk.debug.print_bin( "client computed verify_data", c_verify_data )
       pylurk.debug.print_bin( "server provided verify_data", s_verify_data )
@@ -762,21 +751,14 @@ class CertificateVerify( TLSMsg ):
     signed_content = tls_handshake.certificate_verify_content( role=self.sender )
     signature = self.content[ 'data' ][ 'signature' ]
     algorithm = self.content[ 'data' ][ 'algorithm' ]
-#    if self.test_vector != None:
-#      self.test_vector.handle_bin( 'signature', signature ) 
-#      self.test_vector.handle_bin( 'algorithm', algorithm ) 
-#    return True
     if algorithm in [ 'rsa_pss_rsae_sha256', 'rsa_pss_pss_sha256' ]:
       public_key.verify(
         signature,
         signed_content,
         padding.PSS(
           mgf=padding.MGF1( SHA256() ),
-#          mgf=padding.MGF1( tls_handshake.get_tls_hash() ),
-#          salt_length=padding.PSS.MAX_LENGTH ),
           salt_length=padding.PSS.DIGEST_LENGTH ),
           SHA256() )
-#          tls_handshake.get_tls_hash()  )
     elif algorithm == 'rsa_pkcs1_sha256': 
       public_key.verify(
         signature,
@@ -803,7 +785,6 @@ class CertificateVerify( TLSMsg ):
     ## collecting certificates
     cert_list = []
     for m in handshake_msg_list:
-##      print( f" --- m: {m}" )
       if m[ 'msg_type' ] == 'certificate' :
         handshake_msg_list.remove( m ) 
         cert_list.append( m )
@@ -830,14 +811,10 @@ class CertificateVerify( TLSMsg ):
                  'signature' : lurk_resp[ 'payload' ][ 'signature' ]  }}
 
 
-#  def handle_c_client_finished( self, lurk_client, ks, handshake_msg_list ) :
   def handle_c_client_finished( self, lurk_client, \
     ks, handshake_msg_list, c_register_tickets ) :
     """ generates certificate_verify and updates ks """
 
-#    tmp_tls_handshake = pylurk.tls13.lurk_tls13.TlsHandshake( 'client' )
-#    tmp_tls_handshake.msg_list = handshake_msg_list
-     
     last_exchange = self.get_last_exchange( c_register_tickets, \
       self.conf[ 'tls13' ][ 'post_handshake_authentication'] )
     handshake_msg_list, server_cert, client_cert = self.get_cert_from_handshake_msg_list( handshake_msg_list )
@@ -863,7 +840,6 @@ class CertificateVerify( TLSMsg ):
 
     ## think replacing handshake_msg_list by , tls_handshake
     
-    ## sh = ServerHello( tmp_tls_handshake.msg_list [ 1 ] ]
     last_exchange = self.get_last_exchange( c_register_tickets, \
       self.conf[ 'tls13' ][ 'post_handshake_authentication'] )
     
@@ -883,9 +859,6 @@ class CertificateVerify( TLSMsg ):
     handshake_msg_list, server_cert, client_cert = \
       self.get_cert_from_handshake_msg_list( handshake_msg_list )
    
-#    print( f"--- handshake_msg_list: {handshake_msg_list}" )
-#    print( f"--- server_cert: {server_cert}" ) 
-#    print( f"--- client_cert: {client_cert}" ) 
     lurk_resp = lurk_client.resp( 'c_init_client_finished', \
                               last_exchange=last_exchange, \
                               handshake=handshake_msg_list, \
@@ -904,7 +877,6 @@ class Certificate( TLSMsg ):
     TLSMsg.__init__( self, conf=conf, content_type='handshake', content=content, sender=sender )
     self.msg_type ='certificate'
     
-##  def __init__( self, certificate_entry_list=None, certificate_request_context=b'' ):
 ##    self.content = {
 ##      'msg_type' : 'certificate',
 ##      'data' : { 'certificate_request_context' : certificate_request_context,
@@ -926,7 +898,6 @@ class Certificate( TLSMsg ):
   def get_public_key( self ):
 
     ## we shoudl reuse load_public_bytes from conf.
-#    print( f"--- content: {self.content[ 'data' ][ 'certificate_list' ][ 0 ]}" )
     public_bytes = self.content[ 'data' ][ 'certificate_list' ][ 0 ][ 'cert' ]
     try:
       cert = x509.load_der_x509_certificate( public_bytes )

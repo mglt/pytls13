@@ -1,9 +1,7 @@
 import os.path
 
 ## Directory where the TLS client stores its cryptographic material
-# conf_dir = '/home/emigdan/gitlab/pytls13/src/pytls13/clt_cs/'
 conf_dir = './'
-#conf_dir = '/home/emigdan/gitlab/pytls13/tests/pytls_client'
 key_dir = os.path.join( conf_dir, 'tls_client_keys' )
 
 
@@ -92,9 +90,3 @@ crypto_service_conf_list = {
    }
 }
 
-
-def get_tls_client_conf( ):
-  pass
-
-def get_cs_conf( ):
-  pass
