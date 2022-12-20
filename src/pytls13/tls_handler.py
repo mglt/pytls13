@@ -12,3 +12,9 @@ class TLSAlert(Exception):
     self.description = description
     self.message = message
 
+class ServerTLSAlert( TLSAlert ):
+  pass
+
+class ClientTLSAlert( TLSAlert ):
+  pass
+

@@ -155,6 +155,10 @@ class TLSByteStreamParser:
     self.byte_stream = b''
     self.socket = socket
 
+  def read_bytes( self, bufsize=4096 ):
+#      self.byte_stream += self.socket.recv( 4096 )
+      self.byte_stream += self.socket.recv( bufsize )
+
   def parse_record_layer_length( self) : 
     """ returns the recoord layer length from bytes """
 
@@ -164,14 +168,17 @@ class TLSByteStreamParser:
     """ parse the message and return the inner fragment (of the TLS plain_text) and remaining bytes 
     """
     if len( self.byte_stream ) == 0:
-      self.byte_stream = self.socket.recv( 4096 )
+      self.read_bytes( ) 
+#      self.byte_stream = self.socket.recv( 4096 )
     while self.parse_record_layer_length() > len( self.byte_stream ) :
-      self.byte_stream += self.socket.recv( 4096 )
+      self.read_bytes( ) 
+#      self.byte_stream += self.socket.recv( 4096 )
     record_layer = self.byte_stream[ : self.parse_record_layer_length() ]
     tls_msg = TLSMsg()
     tls_msg.from_record_layer_bytes( record_layer )
     self.byte_stream = self.byte_stream[ self.parse_record_layer_length() : ]
     return tls_msg
+
 
 
 
@@ -782,12 +789,21 @@ class CertificateVerify( TLSMsg ):
   def get_cert_from_handshake_msg_list( self, handshake_msg_list ):
     """parse handshake message list and extract certificates """
 
-    ## collecting certificates
-    cert_list = []
+#    ## collecting certificates
+#    cert_list = []
+#    for m in handshake_msg_list:
+#      if m[ 'msg_type' ] == 'certificate' :
+#        handshake_msg_list.remove( m ) 
+#        cert_list.append( m )
+    print( f"--- handshake_msg_list {handshake_msg_list}" )
+    cert_list = [ ]
     for m in handshake_msg_list:
       if m[ 'msg_type' ] == 'certificate' :
-        handshake_msg_list.remove( m ) 
         cert_list.append( m )
+    for cert in cert_list:
+      handshake_msg_list.remove( cert )
+    print( f"--- cert_list {cert_list}" )
+    print( f"--- handshake_msg_list {handshake_msg_list}" )
     if len( cert_list ) == 2:
       server_cert = { 'cert_type' : 'uncompressed', 'certificate' : cert_list[ 0 ][ 'data' ] } 
       client_cert = { 'cert_type' : 'uncompressed', 'certificate' : cert_list[ 1 ][ 'data' ] } 
@@ -858,7 +874,7 @@ class CertificateVerify( TLSMsg ):
     
     handshake_msg_list, server_cert, client_cert = \
       self.get_cert_from_handshake_msg_list( handshake_msg_list )
-   
+     
     lurk_resp = lurk_client.resp( 'c_init_client_finished', \
                               last_exchange=last_exchange, \
                               handshake=handshake_msg_list, \

@@ -25,23 +25,35 @@ while true; do ./server ; done
 cd pytls13/tests/openssl
 openssl s_server -accept 8402  -tls1_3 -ciphersuites TLS_CHACHA20_POLY1305_SHA256 -key server.key -cert server.crt -debug -keylogfile key.txt -msg -state -tlsextdebug -www
 ## 1.c) OpenSSL for authenticated TLS client
-openssl s_server -cert server.crt -key server.key -WWW -port 8403 -CAfile client.crt  -debug -keylogfile key.txt -msg -state -tlsextdebug -Verify 1
+openssl s_server -cert server.crt -key server.key -www -port 8403 -CAfile client.crt  -debug -keylogfile key.txt -msg -state -tlsextdebug -Verify 1
 
 
 ## 2. Starting the various CS.
 ## 2.a) CS for Illustrated TLS 1.3
 cd pytls13/tests/pytls_client/
 start_cs.py -t 'stateless_tcp' -i ## to start a CS with stateless TCP implementing the Illustrated TLS 1.3 example.
-## 2.b) Generic CS 
+## 2.b) Stateless TCP CS 
 start_cs.py -t 'stateless_tcp'  ## to start the CS with a stateless TCP connectivity
+## 2.c) Stateless TCP CS in SGX
+cd ~/gitlab/pylurk.git/example/stateless_tcp_crypto_service
+## makes sure the keys used by the client are the same as those 
+## used by the CS
+cd ~/gitlab/pylurk.git/example/stateless_tcp_crypto_service
+cp ~/gitlab/pytls13/tests/pytls_client/tls_client_keys/* keys/
+make clean && make SGX=1 DEBUG=1 && gramine-sgx python ./stateless_tcp_crypto_service.py
 
 ## 3. Monitoring the activity of the CS
+## (Only in non SGX mode)
 cd pytls13/tests/pytls_client/
 tail -f crypto_service.log
 
 ## 4.running the tests
 cd pytls13/tests/pytls_client
 ./test_pytls_client.py
+## to test unauthenticated client
+## curl --insecure https://127.0.0.1:8402/index.html 
+## wget https://127.0.0.1:8402/index.html --no-check-certificate
+
 ```
 
 

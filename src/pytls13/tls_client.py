@@ -40,7 +40,6 @@ class ClientTLS13Session:
     print( f"::Instantiating the Lurk client" )
    
     self.lurk_client = pylurk.lurk_client.get_lurk_client_instance( self.clt_conf[ 'lurk_client' ], cs=cs )
-
     resp = self.lurk_client.resp( 'ping' )
     if resp[ 'status' ] != 'success' :
       raise ValueError( "Unable to reach Crypto Service" )
@@ -312,12 +311,13 @@ class ClientTLS13Session:
         client_cert.encrypt_and_send( cipher=c_h_cipher, socket=self.s, sender='client', debug=self.debug ) 
         self.tls_handshake.msg_list.append( client_cert.content )
         tmp_handshake.append( client_cert.content )
+        print( f"--- client certificate: {client_cert.content}" )
         client_cert_verify = pytls13.tls_client_handler.CertificateVerify( conf=self.clt_conf, sender='client' )
         client_cert_verify.handle_c_init_client_finished( self.lurk_client, self.ks, tmp_handshake, self.c_register_tickets )
         self.tls_handshake.msg_list.append(  client_cert_verify.content )
         client_cert_verify.encrypt_and_send( cipher=c_h_cipher, socket=self.s, sender='client', debug=self.debug ) 
         
-      ## TLS client is no authenticated
+      ## TLS client is not authenticated
       ## This basically means that everything has been handled by E which also 
       ## generates the application secrets
       else:
@@ -343,14 +343,24 @@ class ClientTLS13Session:
 
 
   def recv( self ):
-    while True:
+    """ returns application data to the application
+
+    when an alert is returned by the TLS server, a 
+    ServerTLSAlert is raised. 
+    when a Handshake message is received, nothing is returned 
+    to the application, but it is silently handled.
+    """
+    self.stream_parser.read_bytes( )
+   
+    while self.stream_parser.byte_stream != b'' :
       tls_msg = self.stream_parser.parse_single_msg( )
       if tls_msg.content_type == 'application_data' :
         print( f"--- E <- TLS Server: Receiving Application Data from the server\n--->" )
         inner_tls_msg = tls_msg.decrypt_inner_msg( self.s_a_cipher, self.debug )
         if inner_tls_msg.content_type == 'alert':
-          raise  tls_handler.TLSAlert( inner_tls_msg.content[ 'level' ], \
-                                       inner_tls_msg.content[ 'description' ] )
+          raise  pytls13.tls_handler.ServerTLSAlert( \
+                  inner_tls_msg.content[ 'level' ], \
+                  inner_tls_msg.content[ 'description' ] )
         elif inner_tls_msg.content_type == 'application_data':
           return inner_tls_msg.content
         elif inner_tls_msg.content_type == 'handshake':
@@ -366,24 +376,49 @@ class ClientTLS13Session:
                 self.ks.process( 'r', self.tls_handshake )  
             nst = new_session_ticket.content[ 'data' ]
             self.engine_ticket_db.register( self.clt_conf, nst, self.ks, self.tls_handshake )
-            return b''
-#        elif inner_tls_msg.content_type == 'alerte'
       else:
         raise ValueError( f"unexpected packet received: "\
           f"type: {inner_tls_msg.type} , content: {inner_tls_msg.content}" )
+      ## check if there are more bytes to be read.
+      ## In that case, one reads the full packet.
+      ## this woudl need to have the socket in a non blocking state
+      ## self.stream_parser.read_bytes( bufsize=1024, socket.MSG_DONTWAIT)
 
+  def close( self ):
+    self.s.close( )
 
+  def key_log( self, key_log_file="./key_log.txt" ):
+    """ returns the key log file 
+
+    This helps decrypt the session in wireshark 
+    """
+
+    txt = ""
+    if self.ks.secrets[ 'e_s' ] != None:
+      txt += f"CLIENT_EARLY_TRAFFIC_SECRET { str( binascii.hexlify( self.ks.secrets[ 'e_s' ] ), 'utf8') }\n"
+    if self.ks.secrets[ 'h_c' ] != None:
+      txt += f"CLIENT_HANDSHAKE_TRAFFIC_SECRET { str( binascii.hexlify( self.ks.secrets[ 'a_c' ] ), 'utf8' )}\n"
+    if self.ks.secrets[ 'h_s' ] != None:
+      txt += f"SERVER_HANDSHAKE_TRAFFIC_SECRET { str( binascii.hexlify( self.ks.secrets[ 'h_s' ] ), 'utf8' ) }\n"
+    if self.ks.secrets[ 'a_c' ] != None:
+      txt += f"CLIENT_TRAFFIC_SECRET_0 { str( binascii.hexlify( self.ks.secrets[ 'a_c' ] ), 'utf8' ) }\n"
+    if self.ks.secrets[ 'a_s' ] != None:
+      txt += f"SERVER_TRAFFIC_SECRET_0 { str( binascii.hexlify( self.ks.secrets[ 'a_s' ] ), 'utf8' ) }\n"
+    if self.ks.secrets[ 'e_x' ] != None:
+      txt += f"EARLY_EXPORTER_SECRET { str( binascii.hexlify( self.ks.secrets[ 'x' ] ), 'utf8' )}\n"
+    if self.ks.secrets[ 'x' ] != None:
+      txt += f"EXPORTER_SECRET { str( binascii.hexlify( self.ks.secrets[ 'e_x' ] ), 'utf8' )}\n"
+    with open( key_log_file, 'tw', encoding="utf8" ) as f:
+      f.write( txt )  
 
 class SimpleTLS13Client:
 
   def __init__( self, conf ):
     self.conf = conf
-#    self.cs = None
     clt_conf = pytls13.tls_client_conf.Configuration( )
     clt_conf.merge( conf )
     clt_conf.update_cs_conf( )
     self.conf = clt_conf.conf
-    print( f" -0- slef.conf : {self.conf}" )
     ## cs is only needed when the connectivity is lib_cs
     self.cs = None
     if self.conf[ 'lurk_client' ][ 'connectivity' ][ 'type' ] == 'lib_cs' :

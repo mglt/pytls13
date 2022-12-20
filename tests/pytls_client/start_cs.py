@@ -6,8 +6,8 @@ import os.path
 import pprint
 
 import sys 
-sys.path.insert(0, '/home/emigdan/gitlab/pylurk.git/src')
-sys.path.insert(0, '/home/emigdan/gitlab/pytls13/src')
+sys.path.insert(0, '/home/mglt/gitlab/pylurk.git/src')
+sys.path.insert(0, '/home/mglt/gitlab/pytls13/src')
 import pylurk.cs
 import pylurk.conf
 
