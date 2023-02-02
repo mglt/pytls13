@@ -1,3 +1,7 @@
+# Quick start
+
+
+
 # Running the TLS Client Tests:
 
 The tests runs the TLS client against:
@@ -17,22 +21,24 @@ In our case the TLS servers and the CS are running in a debug mode with many out
 
 ```
 ## 1. set the TLS servers 
-## 1.a) Illustrated TLS server
+## 1.a) Illustrated TLS server (127.0.0.1:8400)
 cd illustrated-tls13/server
 while true; do ./server ; done
 
-## 1.b) OpenSSL for unauthenticated TLS client
+## 1.b) OpenSSL for unauthenticated TLS client (127.0.0.1:8402)
 cd pytls13/tests/openssl
 openssl s_server -accept 8402  -tls1_3 -ciphersuites TLS_CHACHA20_POLY1305_SHA256 -key server.key -cert server.crt -debug -keylogfile key.txt -msg -state -tlsextdebug -www
-## 1.c) OpenSSL for authenticated TLS client
+## 1.c) OpenSSL for authenticated TLS client (127.0.0.1:8403)
 openssl s_server -cert server.crt -key server.key -www -port 8403 -CAfile client.crt  -debug -keylogfile key.txt -msg -state -tlsextdebug -Verify 1
 
 
-## 2. Starting the various CS.
+## 2. Starting the various CS
+Currenlty, we assume the CS always started from the pylurk.git/example/cli directory. 
+cd 
 ## 2.a) CS for Illustrated TLS 1.3
 cd pytls13/tests/pytls_client/
 start_cs.py -t 'stateless_tcp' -i ## to start a CS with stateless TCP implementing the Illustrated TLS 1.3 example.
-## 2.b) Stateless TCP CS 
+## 2.b) (Non persistent) TCP CS 
 start_cs.py -t 'stateless_tcp'  ## to start the CS with a stateless TCP connectivity
 ## 2.c) Stateless TCP CS in SGX
 cd ~/gitlab/pylurk.git/example/stateless_tcp_crypto_service

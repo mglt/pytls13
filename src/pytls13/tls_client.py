@@ -230,7 +230,7 @@ class ClientTLS13Session:
           return inner_tls_msg.content
         else:
           raise ValueError( f"unexpected packet received: "\
-            f"type: {inner_tls_msg.type} , content: {inner_tls_msg.content}" )
+            f"type: {inner_tls_msg.content_type} , content: {inner_tls_msg.content}" )
 
     if change_cipher_spec_received is True:
       print( "--- E -> TLS Server : Change Cipher Spec" )
@@ -335,7 +335,7 @@ class ClientTLS13Session:
       self.c_a_cipher.debug( self.debug, description='client_application' )
     
   def send( self, data ):    
-    print( "--- E -> TLS Server: Sending Data" )
+    print( f"--- E -> TLS Server: Sending Data {type( data )}" )
     
     app_data = pytls13.tls_client_handler.TLSMsg( conf=self.clt_conf, content=data, content_type='application_data', sender='client' )
     app_data.encrypt_and_send( cipher=self.c_a_cipher, socket=self.s, sender='client', debug=self.debug ) 
@@ -413,7 +413,81 @@ class ClientTLS13Session:
 
 class SimpleTLS13Client:
 
-  def __init__( self, conf ):
+  def __init__( self, conf:dict ):
+
+    """ defines the most simple TLS13 Client 
+   
+    The TLS client takes a configuration dictionary as an argument.
+
+    The complete configuration file MAY be provided. 
+    However, it is expected this configuration dictionary MAY be 
+    provided in a reduced form that only carry relevant information 
+    leaving other fields to be completed automatically. 
+    The pytls13.tls_client_conf.Configuration( ) object is expected 
+    to perfom such action.
+
+    A typical configuration can be the following one. 
+    Note that these templates are only examples.
+    Not all fields are mandatory. 
+    
+
+    Template with local CS (lib_cs). In this case public 
+    and private keys needs to be provided.    
+    {
+      'destination': {
+         'ip': '127.0.0.1', 
+         'port': 8402
+       },
+       'debug': {
+         'trace': True
+       },
+       'tls13': {
+         'session_resumption': False,
+         'ephemeral_method': 'e_generated'
+       },
+       'description': '  - OpenSSL TLS1.3 Server\n'
+                      '  - authenticated client\n',
+       'lurk_client': {
+         'connectivity': {
+           'type': 'lib_cs'
+          }
+       },
+       'cs': {
+          ('tls13', 'v1'): { 
+            {'public_key': ['./tls_client_keys/_Ed25519PublicKey-ed25519-X509.der'],
+             'private_key': './tls_client_keys/_Ed25519PrivateKey-ed25519-pkcs8.der',
+             'sig_scheme': ['ed25519']}
+          }
+       }
+    }
+ 
+    Template with remote CS. In this case public 
+    and private keys needs to be provided.    
+    {
+      'destination': {
+        'ip': '127.0.0.1',
+        'port': 8402
+      },
+      'debug': {
+        'trace': True
+      },
+      'tls13': {
+        'session_resumption': False,
+        'ephemeral_method': 'e_generated'
+      },
+      'description': '  - OpenSSL TLS1.3 Server\n'
+                     '  - authenticated client\n',
+      'lurk_client': {'connectivity': {'type': 'tcp',
+                                     'ip': '127.0.0.1',
+                                     'port': 9401}},
+      'cs': {
+        ('tls13', 'v1'): {
+          'public_key': ['./tls_client_keys/_Ed25519PublicKey-ed25519-X509.der'],
+          'sig_scheme': ['ed25519']
+        }
+      }
+    }
+    """
     self.conf = conf
     clt_conf = pytls13.tls_client_conf.Configuration( )
     clt_conf.merge( conf )
@@ -427,4 +501,6 @@ class SimpleTLS13Client:
     
   def new_session( self ):
     return ClientTLS13Session( self.conf, self.engine_ticket_db, self.cs )
+
+
 

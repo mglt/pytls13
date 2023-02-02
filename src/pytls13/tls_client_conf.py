@@ -1,5 +1,7 @@
 import copy
-
+import dns.resolver 
+import argparse
+import ipaddress
 #import sys 
 #sys.path.insert(0, '/home/emigdan/gitlab/pylurk.git/src')
 import pylurk.conf 
@@ -143,3 +145,266 @@ class Configuration( pylurk.conf.Configuration ) :
         tmp_cs_conf[ ( 'tls13', 'v1' ) ][ k ] = self.cs_conf.conf[ ( 'tls13', 'v1' ) ][ k ]
       self.conf[ 'cs' ] = tmp_cs_conf
 
+
+
+class CLI( pylurk.conf.CLI ):
+  def __init__( self, url:str="https://127.0.0.1:443", 
+                      session_resumption:bool=False,
+                      reconnect:bool=True,
+                      auto_start_cs:bool=False,
+                      freshness:str='sha256',
+                      ephemeral_method='cs_generated', 
+                      ### argument provided / shared with the cs
+                      ### shared means Engine reuse them from the CS
+                      debug:bool=False,        # shared
+                      test_vector_mode=None,   # shared
+                      test_vector_file=None,   # shared 
+                      connectivity:str='lib_cs', # shared (lurk_client)
+                      host:str='127.0.0.1',       # shared (lurk_client)
+                      port:int=9400,             # shared (lurk_client)
+##                      ## gramine* parameters are only needed if 
+##                      ## one has the ability to start the cs, 
+##                      ## that is if auto_start_cs is set.
+##                      ## when connectivity is set to 'lib_cs'
+##                      ## these parameters are ignored.
+##                      ## gramine could be used for the TLS client.
+##                      ## If so, these parameters would be provided to 
+##                      ## the script setting the environment 
+##                      ## and instantiating this object.
+##                      ## As a result these parameters only apply 
+##                      ## to the cs.
+##                      gramine_sgx:bool=False,    ## not needed here 
+##                      gramine_direct:bool=False  ## as not in template 
+##                      gramine_build:bool=False 
+                      ## sig_scheme is not used by the Engine 
+                      ## as [to check].
+                      ## It is used by the CS to eventually 
+                      ## generate the keys. However, this argument
+                      ## could be optional and only being specified 
+                      ## for the generation of the keys
+                      sig_scheme:str='ed25519', 
+                      supported_ecdhe_groups:str=['x25519'],
+                      ## key is only known to the CS 
+                      key:str=None, # shared (sometimes)
+                      ## cert is both used by the CS and the Engine.
+                      cert:str=None, # shared
+          ):
+    """ generates a conf file from argument provided by en user
+
+    This is an alternative to provide a configuration file.
+    The intent is to make a TLS client accessible using command 
+    line aand to remain compatible with what openssl is providing.
+
+    Compatibility with the s_client command line is not a goal, 
+    but when we can we try to reuse it. 
+
+    Note that the configuration template DOES NOT consider
+    variables that are related to the environement or the 
+    behavior of the tls client. 
+    Such parameters ARE NOT part of the configuration parameters 
+    necessary to instantiate the tls client. 
+
+    This Class however, defines a parser that takes such behavioral
+    and behavioral parameter. 
+    This is a convenience to more generic cli that will implement 
+    the behavior and the environement parameter provided by the 
+    end user.  
+    """
+    self.url = url
+    self.session_resumption = session_resumption
+#    self.reconnect = reconnect 
+#    self.cs_auto_start = cs_auto_start,
+    self.freshness = freshness,
+    self.ephemeral_method = ephemeral_method
+    self.supported_ecdhe_groups = supported_ecdhe_groups
+    if cert == './_Ed25519PublicKey-ed25519-X509.der' :
+    ### argument provided / shared with the cs
+      super().__init__( connectivity, debug, test_vector_mode,\
+                      test_vector_file, host, port, sig_scheme,\
+                      key, cert )
+#    self.gramine_sgx = gramine_direct
+#    self.gramine_direct = gramine_direct
+#    self.gramine_build = gramine_build
+
+
+  def get_template( self ):
+    destination, sent_data = self.get_destination_and_sent_data( )
+    return { 
+      'destination' : destination,
+      'sent_data' : sent_data,
+      'debug' : self.get_debug( ),
+      'lurk_client' : self.get_lurk_client( ),
+      'tls13' : self.get_tls13_client( ), 
+      'cs' : self.get_cs( ),
+            }
+#    self.init_connect( self.connect )
+#    self.init_debug( debug, test_vector_mode, test_vector_file )
+#    self.template[ 'tls13' ][ 'session_resumption' ] = session_resumption
+
+  def parse_url( self, url ):
+    """ initializes various parameters provided in url
+
+    url can take the various forms:
+      * host:port
+      * https://host:port
+
+    with host being an ip address or a hostname.
+
+    We manually parse this as urlparse does not parse properly 
+    in th eabscence of a scheme.
+    """
+
+    if '://' in url:
+      if 'https://' in url:
+        scheme = 'https'
+        netloc_path = url[ 8 : ].split( '/' ) 
+      else:
+        raise ValueError( f"Unknown scheme in {url}" )  
+    else:
+      scheme = ''
+      netloc_path = url.split( '/' ) 
+
+    ## only net_loc 
+    if len( netloc_path ) == 1:
+      netloc = netloc_path[ 0 ]
+      path = '/index.html'
+    else:
+      netloc = netloc_path[ 0 ]
+      path = netloc_path[ len( netloc ) - 1 : ]
+
+    if ':' in netloc:
+      host, port = netloc.split( ':' )
+    else:
+      host = netloc
+      port = 443
+
+    try:
+      if isinstance( ipaddress.ip_address( host ),  ( ipaddress.IPv4Address, ipaddress.IPv6Address ) ) :
+        ip = host
+    except ValueError:
+      answers = dns.resolver.resolve( host, 'A')
+      if len( answers ) == 0:
+        result = dns.resolver.resolve( host, 'AAAA')
+        if len( answers ) == 0:
+          raise ValueError( f"Unable to resolve {host}" )
+      ip = answers[ 0 ].to_text()
+    ## validating format of port and IP address  
+    if isinstance( ipaddress.ip_address( ip ),  ( ipaddress.IPv4Address, ipaddress.IPv6Address ) ) is False :
+      raise ValueError( f"{ip} Unable to find corresponding IP "\
+                        f"address in {url}" )
+    port = int( port )
+    return ( scheme, host, ip, port, path )
+
+  def get_destination_and_sent_data( self ):
+    scheme, host, ip, port, path = self.parse_url( self.url )  
+    destination_template = {}
+    destination_template[ 'ip' ] = ip
+    destination_template[ 'port' ] = port
+    if scheme == 'https' :
+      sent_data = f"GET {path} HTTP/1.1\n Host: {host}\n" 
+      sent_data = sent_data.encode( encoding = 'utf-8' )
+    else: 
+      sent_data = b''
+    return destination_template, sent_data
+ 
+  def get_lurk_client( self ): 
+    lurk_client_template = { 'connectivity' : self.get_connectivity( ) }
+    lurk_client_template[ 'freshness' ] = self.freshness 
+    return lurk_client_template
+
+  def get_tls13_client( self ):
+    tls13_template = {}
+    tls13_template[ 'ephemeral_method' ] = self.ephemeral_method
+    tls13_template[ 'supported_ecdhe_groups' ] = self.supported_ecdhe_groups
+    tls13_template[ 'session_resumption' ] = self.session_resumption
+    return tls13_template 
+
+  def get_cs( self ):
+    ## self.key is known to the Engine when 
+    ## the cs is embeded in the engine mode 'lib_cs'
+    cs_template = super().get_template( ) 
+    if self.connectivity != 'lib_cs' :
+      del cs_template[ ( 'tls13', 'v1' ) ][ 'private_key' ] 
+    return cs_template
+ 
+  def get_parser( self, env:bool=False, conf_dir:str='./', 
+                parser=None ):
+    description = \
+    """
+    Implements a TLS 1.3 Client. 
+    """
+    parser = argparse.ArgumentParser( description=description )
+    parser = super().get_parser( env, conf_dir, parser )
+    parser.add_argument( 'url',  type=ascii, nargs='?', \
+      default='127.0.0.1:443', \
+      help="The URL a TCP/TLS handlshake is performed" )
+    parser.add_argument( '-no_resump', '--no_session_resumption', \
+      default=False, action='store_const', const=True, \
+      help='Indicates session resumption is disables')
+    parser.add_argument( '-fresh', '--freshness', type=ascii, \
+      nargs='?', default='sha256', help='Freshness')
+    parser.add_argument( '-eph_method', '--ephemeral_method', \
+      type=ascii, nargs='?', default='cs_generated', \
+      help='Ephemeral Method')
+    parser.add_argument( '-ecdhe', '--supported_ecdhe_groups', \
+      type=ascii, nargs='?', default='x25519', \
+      help='Ephemeral Method')
+#    self.session_resumption = session_resumption
+#    self.freshness = freshness,
+#    self.ephemeral_method = ephemeral_method
+# supported_ecdhe_groups
+    ## behavioral parameters are not part of the configuration 
+    ## but can influence the bahvior of the tls client.
+    parser.add_argument( '-recon', '--reconnect', default=False,  \
+      action='store_const', const=True, \
+      help='Reconnect with Session Resumption')
+
+##    ## env parameters
+##    ## gramine for e
+##    parser.add_argument( '-sgx', '--gramine_sgx', default=False,  \
+##      action='store_const', const=True, \
+##      help='Crypto Service is run into SGX (gramine)')
+##    parser.add_argument( '-g', '--gramine_direct', default=False,  \
+##      action='store_const', const=True, \
+##      help='Crypto Service is run into SGX (gramine)')
+##    parser.add_argument( '-b', '--gramine_build', default=False,  \
+##      action='store_const', const=True, \
+##      help='Build the Crypto Service into the enclave')
+    parser.add_argument( '-cs', '--cs_auto_start', default=False,  \
+      action='store_const', const=True, \
+      help='Auto start the CS')
+
+    ## gramine for cs
+    ## Note that env=setto True defines --gramine* parameters.
+    ## these parameters are considered to be for the Engine (e).
+    ## This remains consistent with how we defined the parameters 
+    ## for CS. 
+    ## There is a remaining question whether we have use cases for 
+    ## the engine to be protected by SGX as the purpose of the CS is
+    ## to have the CS protected while the Engine remains unprotected.
+    ##   * One possible scenario consists in having the  the full 
+    ##   TLS client run into the SGX enclave in which case 
+    ##   --gramine_sgx is combined with --connectivity lib_cs.
+    ##  * One possible scenario consists in spliting in splitting 
+    ##  the TLS client while benefiting from teh SGX protection. 
+    ##  This combines --gramin_sgc and --connectivity tcp for example.
+    parser.add_argument( '-cs_sgx', '--cs_gramine_sgx', default=False,  \
+      action='store_const', const=True, \
+      help='Crypto Service is run into SGX (gramine)')
+    parser.add_argument( '-cs_g', '--cs_gramine_direct', default=False,  \
+      action='store_const', const=True, \
+      help='Crypto Service is run into SGX (gramine)')
+    parser.add_argument( '-cs_b', '--cs_gramine_build', default=False,  \
+      action='store_const', const=True, \
+      help='Build the Crypto Service into the enclave')
+    return parser
+
+  def init_from_args( self, args ):
+    """ takes from arguments the non env and non behavioral param 
+    """
+    super().init_from_args( args )  
+    self.session_resumption = not args.no_session_resumption
+    self.freshness = args.freshness[1:-1]
+    self.ephemeral_method = args.ephemeral_method[1:-1]
+    self.supported_ecdhe_groups = [ args.supported_ecdhe_groups[1:-1] ]
+    self.url = args.url[1:-1]
