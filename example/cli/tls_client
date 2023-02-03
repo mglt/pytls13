@@ -1,0 +1,116 @@
+#!/usr/bin/python3
+
+import argparse
+import subprocess
+import os
+import sys
+sys.path.insert(0, '/home/mglt/gitlab/pylurk.git/src')
+sys.path.insert(0, '/home/mglt/gitlab/pytls13/src')
+#import pylurk.cs
+import pytls13.tls_client_conf
+
+## CS_GRAMINE contains:
+## 1) the default location for the keys 
+## 2) the scripts to start the CS (see cs_auto_start)
+CS_GRAMINE_DIR = '/home/mglt/gitlab/pylurk.git/example/cli'
+## E_GRAMINE_DIR contains:
+## 1) the scripts to start the Engine.
+E_GRAMINE_DIR = '/home/mglt/gitlab/pytls13/example/cli'
+
+if __name__ == '__main__' :
+  os.chdir( E_GRAMINE_DIR )
+  cli = pytls13.tls_client_conf.CLI( ) 
+  ## keys are always stored in the CS directory.
+  parser = cli.get_parser( env=True, conf_dir=CS_GRAMINE_DIR )
+  args = parser.parse_args()
+
+  print( f" --- Executing: {__file__} with {args}" )
+
+  if args.gramine_build is True:
+    subprocess.Popen( f"make clean && make SGX=1 DEBUG=1", shell=True )
+    os._exit( 0 )
+
+  ## when gramine is involved for the engine, the key and cert files 
+  ## are copied into the E_GRAMINE_DIR/sig_dir_key and the 
+  ## files are replaced by a relative path so they can be taken 
+  ## by GRAMINE.
+  ## The original value is kept so it may be considered as an input 
+  ## to the crypto_service which may or may not perform a copy and
+  ## update
+  cs_key = args.key
+  cs_cert = args.cert 
+  if args.gramine_build is True or args.gramine_sgx is True :
+    if args.key is not None :
+      args.key = cli.copy_and_update_file_path( args.key, \
+                               E_GRAMINE_DIR, 'sig_key_dir' )
+    args.cert = cli.copy_and_update_file_path( args.cert, \
+                               E_GRAMINE_DIR, 'sig_key_dir' )
+
+  
+  ## starting the CS
+  if args.connectivity == 'lib_cs':
+    os._exit( 0 )
+  ## parameters are split between th eengine (e) (only), 
+  ## the crytpo serviec (c)s (only) and shared 
+  e_param = f"--freshness {args.freshness} "\
+        f"--ephemeral_method {args.ephemeral_method[1:-1]} "\
+        f"--supported_ecdhe_groups {args.supported_ecdhe_groups} "
+  cs_param = ""      
+  shared_param = ""
+  ## for arguments that takes a None default when omited
+  ## the command line MUST omit these options as one cannot 
+  ## mention them as 'None'
+  if args.test_vector_file is not None :
+    shared_param += f"--test_vector_file {args.test_vector_file[1:-1]} "
+  if args.test_vector_mode is not None :
+    cmd += f"--test_vector_mode {args.test_vector_mode[1:-1]} "
+  ## for arguments that are boolean, this MUST only be added 
+  ## when there value is True as abscence mens False   
+  if args.debug is True:
+    shared_param += " --debug "
+  if args.no_session_resumption is True:
+    e_param += " --no_session_resumption "
+  if args.reconnect is True:
+    e_param += " --reconnect "
+  ## CS related parameters
+
+  shared_param += f"--connectivity {args.connectivity[1:-1]} "\
+    f"--host {args.host[1:-1]} --port {args.port} "\
+    f"--sig_scheme {args.sig_scheme[1:-1]} --key {args.key} "\
+    f"--cert {args.cert} "
+
+  if args.cs_gramine_sgx is True:
+    cs_param += "--gramine_sgx "
+  if args.cs_gramine_direct is True:
+    cs_param += "--gramine_direct "
+  if args.cs_gramine_direct is True:
+    cs_param += "--gramine_build "
+
+  if args.cs_auto_start is True and args.connectivity != 'lib_cs' :
+    pass
+    ## we probably need to add cs_gramine_direct, cs_gramines_sgx
+    ## to distinguish how the CS is started from the Engine.
+    #### check if cs is reachable (LURK) 
+    ## otherwise
+    ## os.chdir( CS_GRAMINE_DIR )
+    ## replace args.key with cs_key / cs_cert
+    ## cmd = f"./crypto_service {shared_param} {cs_param}"
+    ### subprocess.Popen( cmd , shell=True)
+    ## os.chdir( E_GRAMINE_DIR )
+
+
+  cmd = f"./start_e.py {e_param} {shared_param} {args.url}"
+  print( f"cmd: {cmd}" ) 
+  if args.gramine_sgx is False and args.gramine_direct is False:
+  ##  with pylurk.cs.get_cs_instance( cs_conf.conf ) as cs:
+  ##    cs.serve_forever()
+    subprocess.Popen( f"{cmd}", shell=True)
+  ## We may try to  os.chdir( E_GRAMINE_DIR )
+  ## so THIS script can be executed from anywhere in the host
+  ## only start_e needs to remain in E_GRAMINE_DIR
+  elif args.gramine_sgx is True :
+    subprocess.Popen( f"gramine-sgx python {cmd}", shell=True)
+  elif args.gramine_direct is True :
+    subprocess.Popen( f"gramine-direct python {cmd}", shell=True)
+
+

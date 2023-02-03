@@ -14,6 +14,7 @@ import pprint
 import time
 import pytls13.tls_client 
 #import pytls_client_conf
+import pylurk.tls13.crypto_suites
 import json
 import pylurk
 import socket
@@ -23,18 +24,75 @@ import time
 This scripts tests the tls_client with various configurations
 As the TLS client is split into an engine (E) and a crypto 
 service (CS), the full possible configuration results from 
-the mulitple combinationsof E and CS.
+the mulitple combinations of E and CS.
+
+It assumes the following TLS servers are up:
+
+```
+cd pytls13/tests/openssl
+
+## TLS server without client authentication
+$ openssl s_server -accept 8402  -tls1_3 -ciphersuites TLS_CHACHA20_POLY1305_SHA256 -key server.key -cert server.crt -debug -keylogfile key.txt -msg -state -tlsextdebug -www
+
+## TLS server with client authentication
+$ openssl s_server -cert server.crt -key server.key -www -port 8403 -CAfile client.crt  -debug -keylogfile key.txt -msg -state -tlsextdebug -Verify 1 
+```
 
 CS configuration parameters include:
 * connectivity: lib_cs, tcp, persistent_tcp, 
 * environment: no_gramine, gramine_direct, gramine_sgx 
-* signature scheme: ed25519,
+* signature scheme: ed25519, 'ed448', 'rsa_pss_rsae_sha256', 'rsa_pss_rsae_sha384', 'ecdsa_secp256r1_sha256', 'ecdsa_secp384r1_sha384'
 
 E configurations includes:
 * environment: no_gramine, gramine_direct, gramine_sgx 
-*  session_resumption: 
+*  session_resumption (always have a reconnect) 
 *  ephemeral_method: 'cs_generated', 'e_generated'
-*  supported_ecdhe_groups: x25519
+*  supported_ecdhe_groups: 'x25519', 'x448', 'secp256r1', 'secp384r1', 'secp521r1'
+
+DO_NOT_SHOW_TLS_CLIENT_OUTPUT_WHEN_WEB_PAGE_DETECTED enable to only display the TLS client output upon error. 
+The main purpose of this parameter is to improve readability of the tests.
+
+
+### sig_scheme below generate errors.
+* 'rsa_pss_rsae_sha512',  #nok likely a socket issue
+* 'ecdsa_secp521r1_sha512', #nok to look a bit more in detail.
+
+'rsa_pss_pss_sha256', 'rsa_pss_pss_sha384', 'rsa_pss_pss_sha512'
+are rejected with a illegal parameter error.
+I suspect this results from an incompatibility 
+with the certificate. The current certificate contains rsaEncryption
+which is fine with rsae, but not for rsa-pss
+
+From RFC 8446 section 4.2.3.  Signature Algorithms
+
+```
+RSASSA-PSS PSS algorithms:  Indicates a signature algorithm using
+   RSASSA-PSS [RFC8017] with mask generation function 1.  The digest
+   used in the mask generation function and the digest being signed
+   are both the corresponding hash algorithm as defined in [SHS].
+   The length of the Salt MUST be equal to the length of the digest
+   algorithm.  If the public key is carried in an X.509 certificate,
+   it MUST use the RSASSA-PSS OID [RFC5756].  When used in
+   certificate signatures, the algorithm parameters MUST be DER
+   encoded.  If the corresponding public key's parameters are
+   present, then the parameters in the signature MUST be identical to
+   those in the public key.
+```
+
+'rsa_pkcs1_sha256', 'rsa_pkcs1_sha384', 'rsa_pkcs1_sha512', 
+are not expected to be used in the TLS handshake -
+(see RFC 8446 section 4.2.3.  Signature Algorithms )
+ 
+``` 
+RSASSA-PKCS1-v1_5 algorithms:  Indicates a signature algorithm using
+   RSASSA-PKCS1-v1_5 [RFC8017] with the corresponding hash algorithm
+   as defined in [SHS].  These values refer solely to signatures
+   which appear in certificates (see Section 4.4.2.2) and are not
+   defined for use in signed TLS handshake messages, although they
+   MAY appear in "signature_algorithms" and
+   "signature_algorithms_cert" for backward compatibility with
+   TLS 1.2.
+``` 
 
 """
 
@@ -50,13 +108,26 @@ E_GRAMINE_DIR = '/home/mglt/gitlab/pytls13/example/cli'
 ## which is the one of the CS.
 CREDENTIAL_DIR = os.path.join( CS_GRAMINE_DIR, 'sig_key_dir' ) 
 
-CONNECTIVITY = [ 'persistent_tcp','lib_cs', 'tcp', 'persistent_tcp' ]
+CONNECTIVITY = [ 'lib_cs', 'tcp', 'persistent_tcp' ]
 ENVIRONMENT = [ 'no_gramine', 'gramine_direct', 'gramine_sgx' ]
-SIG_SCHEME = [ 'ed25519' ]
+SIG_SCHEME = [ \
+'rsa_pss_rsae_sha256',
+'rsa_pss_rsae_sha384', 
+'ed25519', 
+'ed448', 
+'ecdsa_secp256r1_sha256', 
+'ecdsa_secp384r1_sha384' 
+]
+
+
 EPH_METHOD = [ 'cs_generated', 'e_generated' ]
-ECDHE_GROUPS = [ 'x25519' ]
+ECDHE_GROUPS = [ 'x25519', 'x448', 'secp256r1', 'secp384r1', 'secp521r1' ]
 
 URL = [ 'https://127.0.0.1:8402', 'https://127.0.0.1:8403']
+ 
+DO_NOT_SHOW_TLS_CLIENT_OUTPUT_WHEN_WEB_PAGE_DETECTED = True
+TLS_CLIENT_FORCE_YES = True
+
 
 CS_PORT = {}
 port = 9400
@@ -68,16 +139,44 @@ for cs_env in ENVIRONMENT:
       CS_PORT[ ( cs_env, con, sig ) ] = port
       port += 1
 
-def cert_file( sig ):
+def cert_file( sig_scheme ):
   """ determine the file containing the certificate """
-  if sig == 'ed25519' :
+  if sig_scheme == 'ed25519' :
     cert_file = '_Ed25519PublicKey-ed25519-X509.der'
+  elif sig_scheme == 'ed448' :
+    cert_file = '_Ed448PublicKey-ed448-X509.der'
+  elif 'rsa' in sig_scheme :
+    cert_file = f"_RSAPublicKey-rsa-X509.der"
+  elif 'ecdsa' in sig_scheme :
+    if 'secp256r1' in sig_scheme :
+      algo = 'ecdsa_secp256r1'
+    elif  'secp384r1' in sig_scheme :
+      algo = 'ecdsa_secp384r1'
+    elif  'secp521r1' in sig_scheme :
+      algo = 'ecdsa_secp521r1'
+    cert_file = f"_EllipticCurvePublicKey-{algo}-X509.der"
+  else:
+    raise ValueError( f"Unknown sig_scheme value {sig}")
   return os.path.join( CREDENTIAL_DIR, cert_file )
 
-def key_file( sig ):
+def key_file( sig_scheme ):
   """ determine the file containing the private key """
-  if sig == 'ed25519' :
+  if sig_scheme == 'ed25519' :
     cert_file = '_Ed25519PrivateKey-ed25519-pkcs8.der'
+  elif sig_scheme == 'ed448' :
+    cert_file = '_Ed448PrivateKey-ed448-pkcs8.der'
+  elif 'rsa' in sig_scheme :
+    cert_file = f"_RSAPrivateKey-rsa-pkcs8.der"
+  elif 'ecdsa' in sig_scheme :
+    if 'secp256r1' in sig_scheme :
+      algo = 'ecdsa_secp256r1'
+    elif  'secp384r1' in sig_scheme :
+      algo = 'ecdsa_secp384r1'
+    elif  'secp521r1' in sig_scheme :
+      algo = 'ecdsa_secp521r1'
+    cert_file = f"_EllipticCurvePrivateKey-{algo}-pkcs8.der"
+  else:
+    raise ValueError( f"Unknown sig_scheme value {sig}")
   return os.path.join( CREDENTIAL_DIR, cert_file )
 
 def cli_gramine_param( env ):
@@ -143,6 +242,7 @@ def crypto_service( env, con, sig )->bool:
       param = cli_gramine_param( env ) 
       param += cli_cs_param( env, con, sig ) 
       param += f"--key  {key_file( sig )} "
+      param += f"--debug "
       show( f"\n --- CS cli ./crypto_service {param}\n" )
 #      subprocess.Popen( f"./crypto_service {param}", shell=True )
 #      completed_proc = subprocess.run( f"./crypto_service {param}", shell=True, check=True, capture_output=True, text=True )
@@ -181,6 +281,7 @@ def tls_client( e_env, cs_env, con, sig, eph_m, ecdhe, url ):
   param += f"--ephemeral_method {eph_m} "
   param += f"--supported_ecdhe_groups {ecdhe} "
   param += f"--reconnect "
+  param += f"--debug "
   ## the final element
   param += f" {url}"  
   
@@ -205,6 +306,18 @@ def tls_client( e_env, cs_env, con, sig, eph_m, ecdhe, url ):
     os.chdir( current_dir )
     return completed_process, cli_cmd
 
+def is_tls_client_successful( stdout ):
+  """ determine if the tls client exchange is successful 
+  
+  This is done by ensuring a successful HTTP response 
+  has been received
+  """  
+  ## we use reconnect  
+  ## and the response appears twice: once 
+  ## for real and once in the structure description
+  if stdout.count( 'HTTP/1.0 200' ) == 4 :
+    return True
+  return False
 
 def show( obj ):
   pprint.pprint( obj, width=65, sort_dicts=False) 
@@ -266,26 +379,36 @@ if __name__ == '__main__' :
   show( completed_proc.stdout )
 #  print( completed_proc.stdout.split( '\n' ) )
 #  print( len( completed_proc.stdout.split( '\n' ) ) )
-  if len( completed_proc.stdout.split( '\n' ) ) != cs_config_nbr :
+  if len( completed_proc.stdout.split( '\n' ) ) - 1 != cs_config_nbr :
     response = input( f"Confirm the {cs_config_nbr} CS are up? [y]" )
     if response not in [ '', 'y' ]:
       os._exit( 0 )
-  response = input( "Showing Command Line Interface? [y]" )
-  if response in [ '', 'y' ]:
-    show( cli_cmd_dict )
+  has_cmd_cli = False
+  for k in cli_cmd_dict.keys():
+    if cli_cmd_dict[ k ] != None:
+      response = input( "Showing Command Line Interface? [y]" )
+      if response in [ '', 'y' ]:
+        cs_index += 1
+        for k in cli_cmd_dict.keys():
+          print( f"{cs_index}) {k} " )
+          print( f"{cli_cmd_dict[ k ]}\n" )
+          cs_index += 1
+          show( cli_cmd_dict )
+      break
 
   response = input( f"Proceed to TLS client tests? [y]" )
   if response not in [ '', 'y' ]:
     os._exit( 0 )
 
 
-  DO_NOT_SHOW_OUTPUT_WHEN_WEB_PAGE_DETECTED = True
-
   ## testing the clients configurations
   show( f"-------------------------" )
   show( f"       TLS Client        " )
   show( f"-------------------------" )
+
+  ## 
   completed_proc_dict  = {}
+  cli_cmd_dict  = {}
 
   e_index = 1
   for e_env in ENVIRONMENT:             # 3
@@ -300,13 +423,15 @@ if __name__ == '__main__' :
               for url in URL:           # 2
                 completed_proc, cli_cmd = tls_client( e_env, cs_env, con, sig, eph_m, ecdhe, url )
                 param = ( e_env, cs_env, con, sig, eph_m, ecdhe, url )
-                show( f" {e_index}) {param}" )
+                print( f" {e_index}) {param}" )
                 completed_proc_dict[ param ] = completed_proc
-                if DO_NOT_SHOW_OUTPUT_WHEN_WEB_PAGE_DETECTED is True and\
-                   "<HTML><BODY BGCOLOR=\"#ffffff\">" in completed_proc.stdout :
+                cli_cmd_dict[ param ] = cli_cmd
+                if DO_NOT_SHOW_TLS_CLIENT_OUTPUT_WHEN_WEB_PAGE_DETECTED is True and\
+                    is_tls_client_successful( completed_proc.stdout ) is True:
                     pass
                 else:
-                  show( completed_proc )
+                  show( completed_proc.stdout )
+#                  print( f" count: {completed_proc.stdout.count( 'HTTP/1.0 200' )}" )
                   ## We repeat param as showing completed_proc
                   ## contains the output which can be very verbose
                   ## and make hard to see what test has actually 
@@ -314,96 +439,16 @@ if __name__ == '__main__' :
                   show( f"--- {param} has just been tested." )
 # #                show( completed_proc.stdout )
 # #                show( completed_proc.stderr )
-            
-                  response = input( "Proceed to next TLS client? [y]" )
-                  if response not in [ '', 'y' ]:
-                    os._exit( 0 )
+                  if TLS_CLIENT_FORCE_YES is False:
+                    response = input( "Proceed to next TLS client? [y]" )
+                    if response not in [ '', 'y' ]:
+                      os._exit( 0 )
                 e_index += 1
   response = input( "Showing Command Line Interface? [y]" )
+  e_index = 1
   if response in [ '', 'y' ]:
-    show( completed_proc_dict )
-               
-#              if completed_proc.returncode != 0 :
-#                print( f"------------------------" )
-#                break
-#              completed_proc_dict[ param ] = completed_proc
-#  pprint.pprint( completed_proc_dict ) 
-
-
-##$ ./test_openssl_servers.py 
-## --- Executing: /home/mglt/gitlab/pytls13/tests/pytls_client/./test_openssl_servers.py
-##
-##-------------------------
-## Instantiation of the CS 
-##-------------------------
-##
-##{('no_gramine', 'tcp', 'ed25519'): 9400, ('no_gramine', 'persistent_tcp', 'ed25519'): 9401, ('gramine_direct', 'tcp', 'ed25519'): 9402, ('gramine_direct', 'persistent_tcp', 'ed25519'): 9403, ('gramine_sgx', 'tcp', 'ed25519'): 9404, ('gramine_sgx', 'persistent_tcp', 'ed25519'): 9405}
-##CS ('no_gramine', 'tcp', 'ed25519')
-##--- E -> CS: Sending ping Request:
-##
-## --- CS cli ./crypto_service --connectivity tcp --port 9400 --sig_scheme ed25519 --cert /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PublicKey-ed25519-X509.der --key  /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PrivateKey-ed25519-pkcs8.der 
-##
-##CS ('no_gramine', 'persistent_tcp', 'ed25519')
-##
-## --- CS cli ./crypto_service --connectivity persistent_tcp --port 9401 --sig_scheme ed25519 --cert /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PublicKey-ed25519-X509.der --key  /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PrivateKey-ed25519-pkcs8.der 
-##
-##CS ('gramine_direct', 'tcp', 'ed25519')
-##--- E -> CS: Sending ping Request:
-##
-## --- CS cli ./crypto_service --connectivity tcp --port 9402 --gramine_direct --sig_scheme ed25519 --cert /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PublicKey-ed25519-X509.der --key  /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PrivateKey-ed25519-pkcs8.der 
-##
-##CS ('gramine_direct', 'persistent_tcp', 'ed25519')
-##
-## --- CS cli ./crypto_service --connectivity persistent_tcp --port 9403 --gramine_direct --sig_scheme ed25519 --cert /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PublicKey-ed25519-X509.der --key  /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PrivateKey-ed25519-pkcs8.der 
-##
-##CS ('gramine_sgx', 'tcp', 'ed25519')
-##--- E -> CS: Sending ping Request:
-##
-## --- CS cli ./crypto_service --connectivity tcp --port 9404 --gramine_sgx --sig_scheme ed25519 --cert /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PublicKey-ed25519-X509.der --key  /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PrivateKey-ed25519-pkcs8.der 
-##
-##CS ('gramine_sgx', 'persistent_tcp', 'ed25519')
-##
-## --- CS cli ./crypto_service --connectivity persistent_tcp --port 9405 --gramine_sgx --sig_scheme ed25519 --cert /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PublicKey-ed25519-X509.der --key  /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PrivateKey-ed25519-pkcs8.der 
-##
-##
-##-------------------------
-##       TLS Client       
-##-------------------------
-##
-##./tls_client --connectivity lib_cs --sig_scheme ed25519 --cert /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PublicKey-ed25519-X509.der --key  /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PrivateKey-ed25519-pkcs8.der --ephemeral_method cs_generated --supported_ecdhe_groups x25519 --reconnect  https://127.0.0.1:8402
-##./tls_client --connectivity lib_cs --sig_scheme ed25519 --cert /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PublicKey-ed25519-X509.der --key  /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PrivateKey-ed25519-pkcs8.der --ephemeral_method cs_generated --supported_ecdhe_groups x25519 --reconnect  https://127.0.0.1:8403
-##./tls_client --connectivity lib_cs --sig_scheme ed25519 --cert /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PublicKey-ed25519-X509.der --key  /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PrivateKey-ed25519-pkcs8.der --ephemeral_method e_generated --supported_ecdhe_groups x25519 --reconnect  https://127.0.0.1:8402
-##./tls_client --connectivity lib_cs --sig_scheme ed25519 --cert /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PublicKey-ed25519-X509.der --key  /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PrivateKey-ed25519-pkcs8.der --ephemeral_method e_generated --supported_ecdhe_groups x25519 --reconnect  https://127.0.0.1:8403
-## ---- ERRROR vvvvvv
-##./tls_client --connectivity tcp --port 9400 --sig_scheme ed25519 --cert /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PublicKey-ed25519-X509.der --ephemeral_method cs_generated --supported_ecdhe_groups x25519 --reconnect  https://127.0.0.1:8402
-##./tls_client --connectivity tcp --port 9400 --sig_scheme ed25519 --cert /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PublicKey-ed25519-X509.der --ephemeral_method cs_generated --supported_ecdhe_groups x25519 --reconnect  https://127.0.0.1:8403
-##./tls_client --connectivity tcp --port 9400 --sig_scheme ed25519 --cert /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PublicKey-ed25519-X509.der --ephemeral_method e_generated --supported_ecdhe_groups x25519 --reconnect  https://127.0.0.1:8402
-##./tls_client --connectivity tcp --port 9400 --sig_scheme ed25519 --cert /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PublicKey-ed25519-X509.der --ephemeral_method e_generated --supported_ecdhe_groups x25519 --reconnect  https://127.0.0.1:8403
-##./tls_client --connectivity persistent_tcp --port 9401 --sig_scheme ed25519 --cert /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PublicKey-ed25519-X509.der --ephemeral_method cs_generated --supported_ecdhe_groups x25519 --reconnect  https://127.0.0.1:8402
-##./tls_client --connectivity persistent_tcp --port 9401 --sig_scheme ed25519 --cert /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PublicKey-ed25519-X509.der --ephemeral_method cs_generated --supported_ecdhe_groups x25519 --reconnect  https://127.0.0.1:8403
-##./tls_client --connectivity persistent_tcp --port 9401 --sig_scheme ed25519 --cert /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PublicKey-ed25519-X509.der --ephemeral_method e_generated --supported_ecdhe_groups x25519 --reconnect  https://127.0.0.1:8402
-##./tls_client --connectivity persistent_tcp --port 9401 --sig_scheme ed25519 --cert /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PublicKey-ed25519-X509.der --ephemeral_method e_generated --supported_ecdhe_groups x25519 --reconnect  https://127.0.0.1:8403
-##./tls_client --connectivity lib_cs --gramine_direct --sig_scheme ed25519 --cert /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PublicKey-ed25519-X509.der --key  /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PrivateKey-ed25519-pkcs8.der --ephemeral_method cs_generated --supported_ecdhe_groups x25519 --reconnect  https://127.0.0.1:8402
-##./tls_client --connectivity lib_cs --gramine_direct --sig_scheme ed25519 --cert /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PublicKey-ed25519-X509.der --key  /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PrivateKey-ed25519-pkcs8.der --ephemeral_method cs_generated --supported_ecdhe_groups x25519 --reconnect  https://127.0.0.1:8403
-##./tls_client --connectivity lib_cs --gramine_direct --sig_scheme ed25519 --cert /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PublicKey-ed25519-X509.der --key  /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PrivateKey-ed25519-pkcs8.der --ephemeral_method e_generated --supported_ecdhe_groups x25519 --reconnect  https://127.0.0.1:8402
-##./tls_client --connectivity lib_cs --gramine_direct --sig_scheme ed25519 --cert /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PublicKey-ed25519-X509.der --key  /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PrivateKey-ed25519-pkcs8.der --ephemeral_method e_generated --supported_ecdhe_groups x25519 --reconnect  https://127.0.0.1:8403
-##./tls_client --connectivity tcp --port 9402 --gramine_direct --sig_scheme ed25519 --cert /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PublicKey-ed25519-X509.der --ephemeral_method cs_generated --supported_ecdhe_groups x25519 --reconnect  https://127.0.0.1:8402
-##./tls_client --connectivity tcp --port 9402 --gramine_direct --sig_scheme ed25519 --cert /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PublicKey-ed25519-X509.der --ephemeral_method cs_generated --supported_ecdhe_groups x25519 --reconnect  https://127.0.0.1:8403
-##./tls_client --connectivity tcp --port 9402 --gramine_direct --sig_scheme ed25519 --cert /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PublicKey-ed25519-X509.der --ephemeral_method e_generated --supported_ecdhe_groups x25519 --reconnect  https://127.0.0.1:8402
-##./tls_client --connectivity tcp --port 9402 --gramine_direct --sig_scheme ed25519 --cert /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PublicKey-ed25519-X509.der --ephemeral_method e_generated --supported_ecdhe_groups x25519 --reconnect  https://127.0.0.1:8403
-##./tls_client --connectivity persistent_tcp --port 9403 --gramine_direct --sig_scheme ed25519 --cert /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PublicKey-ed25519-X509.der --ephemeral_method cs_generated --supported_ecdhe_groups x25519 --reconnect  https://127.0.0.1:8402
-##./tls_client --connectivity persistent_tcp --port 9403 --gramine_direct --sig_scheme ed25519 --cert /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PublicKey-ed25519-X509.der --ephemeral_method cs_generated --supported_ecdhe_groups x25519 --reconnect  https://127.0.0.1:8403
-##./tls_client --connectivity persistent_tcp --port 9403 --gramine_direct --sig_scheme ed25519 --cert /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PublicKey-ed25519-X509.der --ephemeral_method e_generated --supported_ecdhe_groups x25519 --reconnect  https://127.0.0.1:8402
-##./tls_client --connectivity persistent_tcp --port 9403 --gramine_direct --sig_scheme ed25519 --cert /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PublicKey-ed25519-X509.der --ephemeral_method e_generated --supported_ecdhe_groups x25519 --reconnect  https://127.0.0.1:8403
-##./tls_client --connectivity lib_cs --gramine_sgx --sig_scheme ed25519 --cert /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PublicKey-ed25519-X509.der --key  /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PrivateKey-ed25519-pkcs8.der --ephemeral_method cs_generated --supported_ecdhe_groups x25519 --reconnect  https://127.0.0.1:8402
-##./tls_client --connectivity lib_cs --gramine_sgx --sig_scheme ed25519 --cert /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PublicKey-ed25519-X509.der --key  /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PrivateKey-ed25519-pkcs8.der --ephemeral_method cs_generated --supported_ecdhe_groups x25519 --reconnect  https://127.0.0.1:8403
-##./tls_client --connectivity lib_cs --gramine_sgx --sig_scheme ed25519 --cert /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PublicKey-ed25519-X509.der --key  /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PrivateKey-ed25519-pkcs8.der --ephemeral_method e_generated --supported_ecdhe_groups x25519 --reconnect  https://127.0.0.1:8402
-##./tls_client --connectivity lib_cs --gramine_sgx --sig_scheme ed25519 --cert /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PublicKey-ed25519-X509.der --key  /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PrivateKey-ed25519-pkcs8.der --ephemeral_method e_generated --supported_ecdhe_groups x25519 --reconnect  https://127.0.0.1:8403
-##./tls_client --connectivity tcp --port 9404 --gramine_sgx --sig_scheme ed25519 --cert /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PublicKey-ed25519-X509.der --ephemeral_method cs_generated --supported_ecdhe_groups x25519 --reconnect  https://127.0.0.1:8402
-##./tls_client --connectivity tcp --port 9404 --gramine_sgx --sig_scheme ed25519 --cert /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PublicKey-ed25519-X509.der --ephemeral_method cs_generated --supported_ecdhe_groups x25519 --reconnect  https://127.0.0.1:8403
-##./tls_client --connectivity tcp --port 9404 --gramine_sgx --sig_scheme ed25519 --cert /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PublicKey-ed25519-X509.der --ephemeral_method e_generated --supported_ecdhe_groups x25519 --reconnect  https://127.0.0.1:8402
-##./tls_client --connectivity tcp --port 9404 --gramine_sgx --sig_scheme ed25519 --cert /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PublicKey-ed25519-X509.der --ephemeral_method e_generated --supported_ecdhe_groups x25519 --reconnect  https://127.0.0.1:8403
-##./tls_client --connectivity persistent_tcp --port 9405 --gramine_sgx --sig_scheme ed25519 --cert /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PublicKey-ed25519-X509.der --ephemeral_method cs_generated --supported_ecdhe_groups x25519 --reconnect  https://127.0.0.1:8402
-##./tls_client --connectivity persistent_tcp --port 9405 --gramine_sgx --sig_scheme ed25519 --cert /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PublicKey-ed25519-X509.der --ephemeral_method cs_generated --supported_ecdhe_groups x25519 --reconnect  https://127.0.0.1:8403
-##./tls_client --connectivity persistent_tcp --port 9405 --gramine_sgx --sig_scheme ed25519 --cert /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PublicKey-ed25519-X509.der --ephemeral_method e_generated --supported_ecdhe_groups x25519 --reconnect  https://127.0.0.1:8402
-##./tls_client --connectivity persistent_tcp --port 9405 --gramine_sgx --sig_scheme ed25519 --cert /home/mglt/gitlab/pylurk.git/example/cli/sig_key_dir/_Ed25519PublicKey-ed25519-X509.der --ephemeral_method e_generated --supported_ecdhe_groups x25519 --reconnect  https://127.0.0.1:8403
+    for k in cli_cmd_dict.keys():
+      print( f"{e_index}) {k} " )
+      print( f"{cli_cmd_dict[ k ]}\n" )
+      e_index += 1
+#    show( cli_cmd_dict )
