@@ -768,6 +768,7 @@ ContentType = Enum( BytesInteger(1),
   application_data = 23
 )
 
+## plaintext with single message
 TLSPlaintext = Struct(
   'type' / ContentType, 
   'legacy_record_version' /  Const( b'\x03\x03' ),
@@ -777,6 +778,20 @@ TLSPlaintext = Struct(
        'handshake' : Handshake, 
        'application_data' : GreedyBytes } ) )
 )
+
+## new structure
+## FragmentTLSPlaintext is expected to become TLSPlaintext
+FragmentTLSPlaintext = Struct(
+  'type' / ContentType, 
+  'legacy_record_version' /  Const( b'\x03\x03' ),
+  'fragment' / Prefixed( BytesInteger(2), Switch( this.type, 
+     { 'change_cipher_spec' : ChangeCipherSpec, 
+       'alert' : Alert, 
+       'handshake' : GreedyBytes, ## as it may be fragmented 
+       'application_data' : GreedyBytes } ) )
+)
+
+
 
 #TLSPlaintextRange = Struct( 
 #  GreedyRange( TLSPlaintext )
@@ -804,3 +819,16 @@ TLSInnerPlaintext = Struct(
 #  'zeros' / Array( this._.length_of_padding, Const(b'\x00') ) 
   'zeros' / Padding( this._.length_of_padding, b'\x00' ) 
 )
+
+FragmentTLSInnerPlaintext = Struct(
+#  'content' / GreedyBytes,
+  
+  'content' /  Switch( this._.type,
+     { 'change_cipher_spec' : ChangeCipherSpec,
+       'alert' : Alert,
+       'handshake' : Bytes( this._.clear_text_msg_len ),
+       'application_data' : Bytes( this._.clear_text_msg_len ) } ),
+  'type' / ContentType, 
+  'zeros' / Padding( this._.length_of_padding, b'\x00' ) 
+)
+

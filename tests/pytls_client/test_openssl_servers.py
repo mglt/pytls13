@@ -108,24 +108,24 @@ E_GRAMINE_DIR = '/home/mglt/gitlab/pytls13/example/cli'
 ## which is the one of the CS.
 CREDENTIAL_DIR = os.path.join( CS_GRAMINE_DIR, 'sig_key_dir' ) 
 
-CONNECTIVITY = [ 'lib_cs', 'tcp', 'persistent_tcp' ]
-ENVIRONMENT = [ 'no_gramine', 'gramine_direct', 'gramine_sgx' ]
+CONNECTIVITY = [ 'lib_cs' ]#, 'tcp', 'persistent_tcp' ]
+ENVIRONMENT = [ 'no_gramine']#, 'gramine_direct', 'gramine_sgx' ]
 SIG_SCHEME = [ \
-'rsa_pss_rsae_sha256',
-'rsa_pss_rsae_sha384', 
+#'rsa_pss_rsae_sha256',
+#'rsa_pss_rsae_sha384', 
 'ed25519', 
-'ed448', 
-'ecdsa_secp256r1_sha256', 
-'ecdsa_secp384r1_sha384' 
+#'ed448', 
+#'ecdsa_secp256r1_sha256', 
+#'ecdsa_secp384r1_sha384' 
 ]
 
 
 EPH_METHOD = [ 'cs_generated', 'e_generated' ]
-ECDHE_GROUPS = [ 'x25519', 'x448', 'secp256r1', 'secp384r1', 'secp521r1' ]
+ECDHE_GROUPS = [ 'x25519']#, 'x448', 'secp256r1', 'secp384r1', 'secp521r1' ]
 
 URL = [ 'https://127.0.0.1:8402', 'https://127.0.0.1:8403']
  
-DO_NOT_SHOW_TLS_CLIENT_OUTPUT_WHEN_WEB_PAGE_DETECTED = True
+DO_NOT_SHOW_TLS_CLIENT_OUTPUT_WHEN_WEB_PAGE_DETECTED = False
 TLS_CLIENT_FORCE_YES = True
 
 
@@ -370,31 +370,32 @@ if __name__ == '__main__' :
 #  else:
 #    time.sleep ( 5 )
   cs_config_nbr = len( CS_PORT.keys() )
-  show( f"All {cs_config_nbr} CS instances have been started" )
-  show( "CS_PORT :" )
-  show( CS_PORT )
-  completed_proc = subprocess.run( \
-    f"lsof -i | grep LISTEN | grep 94 ", shell=True,\
-    check=True, capture_output=True, text=True )
-  show( completed_proc.stdout )
-#  print( completed_proc.stdout.split( '\n' ) )
-#  print( len( completed_proc.stdout.split( '\n' ) ) )
-  if len( completed_proc.stdout.split( '\n' ) ) - 1 != cs_config_nbr :
-    response = input( f"Confirm the {cs_config_nbr} CS are up? [y]" )
-    if response not in [ '', 'y' ]:
-      os._exit( 0 )
-  has_cmd_cli = False
-  for k in cli_cmd_dict.keys():
-    if cli_cmd_dict[ k ] != None:
-      response = input( "Showing Command Line Interface? [y]" )
-      if response in [ '', 'y' ]:
-        cs_index += 1
-        for k in cli_cmd_dict.keys():
-          print( f"{cs_index}) {k} " )
-          print( f"{cli_cmd_dict[ k ]}\n" )
+  if cs_config_nbr != 0:
+    show( f"All {cs_config_nbr} CS instances have been started" )
+    show( "CS_PORT :" )
+    show( CS_PORT )
+    completed_proc = subprocess.run( \
+      f"lsof -i | grep LISTEN | grep 94 ", shell=True,\
+      check=True, capture_output=True, text=True )
+    show( completed_proc.stdout )
+# #  print( completed_proc.stdout.split( '\n' ) )
+# #  print( len( completed_proc.stdout.split( '\n' ) ) )
+    if len( completed_proc.stdout.split( '\n' ) ) - 1 != cs_config_nbr :
+      response = input( f"Confirm the {cs_config_nbr} CS are up? [y]" )
+      if response not in [ '', 'y' ]:
+        os._exit( 0 )
+    has_cmd_cli = False
+    for k in cli_cmd_dict.keys():
+      if cli_cmd_dict[ k ] != None:
+        response = input( "Showing Command Line Interface? [y]" )
+        if response in [ '', 'y' ]:
           cs_index += 1
-          show( cli_cmd_dict )
-      break
+          for k in cli_cmd_dict.keys():
+            print( f"{cs_index}) {k} " )
+            print( f"{cli_cmd_dict[ k ]}\n" )
+            cs_index += 1
+            show( cli_cmd_dict )
+        break
 
   response = input( f"Proceed to TLS client tests? [y]" )
   if response not in [ '', 'y' ]:

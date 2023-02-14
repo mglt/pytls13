@@ -1,6 +1,10 @@
 # Quick start
 
 
+testing facebook:
+$ ./tls_client --connectivity lib_cs --cert _Ed25519PublicKey-ed25519-X509.der --key _Ed25519PrivateKey-ed25519-pkcs8.der  www.facebook.com --debug
+
+We need to consider fragmentation/reassembly of the InnerPlaintextpacket
 
 # Running the TLS Client Tests:
 
