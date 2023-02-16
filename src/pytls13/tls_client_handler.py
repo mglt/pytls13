@@ -54,18 +54,9 @@ class TLSMsg:
     self.content_type = None #'handshake' ## the type of 
     if content_type is not None:
       self.content_type = content_type
-#    self.msg_type = None # 'client_hello' ## handshake type when 
     self.content = {}        ## the clear text msg or application data
     if content != {}:
       self.content = content
-    try:
-      if self.conf[ 'debug' ][ 'test_vector' ] is True and \
-        self.conf[ 'debug' ][ 'test_vector_tls_traffic' ] is False:
-        self.no_traffic = True
-      else:
-        self.no_traffic = False
-    except( TypeError, KeyError ):
-      self.no_traffic = False
     self.sender = None  
     if sender is not None:
       self.sender = sender
@@ -163,11 +154,6 @@ class TLSMsg:
       descriptor = f"{descriptor}_{label}"
     return descriptor
 
-#  def show( self, content_type=None, content=None ):
-#    """ show the current TLSMsg """
-#    self.record_layer_bytes = self.to_record_layer_bytes( content_type=content_type, content=content )
-#    pylurk.debug.print_bin( "", self.record_layer_bytes ) 
-  
   def add_ext( self, ext_list ) :
     for ext in ext_list:
       self.content[ 'data' ][ 'extensions' ].append( ext.content )
@@ -177,18 +163,12 @@ class TLSMsg:
 
     The current tls msg is considered as the inner clear text message
     """
-    ## inner_cipher_text, inner_clear_text, inner_clear_text_struct = cipher.encrypt( self.content, content_type=self.content_type, debug=True )
 
     if debug is not None:
       if self.content_type == 'handshake' : 
         print( f":: Sending {self.content[ 'msg_type' ]}\n" ) 
       else:           
         print( f":: Sending {self.content_type}\n" ) 
-#      print( f"DEBUG: dict {self.to_inner_msg_struct()} " ) 
-#      print( f"DEBUG: bytes {self.to_inner_msg_bytes()} " )
-#      print( tls.TLSInnerPlaintext.parse( self.to_inner_msg_bytes(), \
-#             type=self.content_type,
-#             length_of_padding=len( self.zeros ) ) )
       debug.handle_inner_tls_msg( self )   
     inner_cipher_text = cipher.encrypt( self.content, \
             content_type=self.content_type, debug=debug )
@@ -200,13 +180,7 @@ class TLSMsg:
       debug.client_tls_msg_counter += 1
       debug.handle_tls_record( tls_msg )
       debug.client_tls_record_counter += 1
-
-#      debug.handle_tls_cipher_text_msg_enc( tls_msg, \
-#                                                  inner_clear_text,\
-#                                                  inner_clear_text_struct,\
-#                                                  sender=sender)
-    if self.no_traffic is False:
-      socket.sendall( tls_msg.to_record_layer_bytes( ) )
+    socket.sendall( tls_msg.to_record_layer_bytes( ) )
 
   def decrypt_inner_msg( self, cipher, debug=None ) :
     """ decyrpt the inner plaintext of the encrypted fragment 
@@ -335,21 +309,7 @@ class TLSByteStreamParser:
     ## The fragment left may already contain a TLS message - 
     ## without necessarily the need of an additional plaintext fragment. 
     if plain_text == None:
-        plain_text = TLSMsg( content=b'', content_type='handshake')
-
-##    ## fragmentation only occurs with handshake message
-##    if plain_text.content_type == 'application_data' :
-##      tls_message = plain_text_fragment
-##    elif plain_text.content_type == 'change_cipher_spec':
-##      if isinstance( tls_plain_text.content, bytes ):
-##        tls_message = tls.ChangeCipherSpec.parse( plain_text_fragment )
-##      else: 
-##        tls_message = tls_plain_text.content
-##    elif plain_text.content_type == 'alert':
-##      if isinstance( tls_plain_text.content, bytes ):
-##        tls_message = tls13.Alerte.parse( plain_text_fragment )
-##      else: 
-##        tls_message = tls_plain_text.content
+        plain_text = TLSMsg( content=b'', content_type='handshake', sender=self.sender)
 
     if plain_text.content_type == 'handshake' :
       plain_text_fragment = self.fragment + plain_text.content
@@ -376,21 +336,20 @@ class TLSByteStreamParser:
         tls_message = None
     else:
       raise ValueError( f"Unknown TLSMsg of type {plain_text.content_type}" )
-    ## we only print when the message is re-assembled
-    ## we only do that for handshake as other message 
-    ## are not impacted by fragmentation
-    if self.debug is not None and tls_message is not None:
-        
-      self.debug.trace_bin( f"handshake_message:", tls_message_bytes ) 
-      print( f"handshake_message: {tls_message}" )
     tls_msg = TLSMsg( sender=plain_text.sender )
     tls_msg.from_record_layer_struct( { \
               'type': plain_text.content_type,\
               'content': tls_message })
-    if tls_msg.content_type == 'handshake':
-      print( f":: {tls_msg.content[ 'msg_type' ]} received\n" )
-    else :
-      print( f":: {tls_msg.content_type} received\n" )
+    ## we only print when the message is re-assembled
+    ## we only do that for handshake as other message 
+    ## are not impacted by fragmentation
+    if self.debug is not None and tls_message is not None:
+      self.debug.trace_bin( f"handshake_message:", tls_message_bytes ) 
+      print( f"handshake_message: {tls_message}" )
+      if tls_msg.content_type == 'handshake':
+        print( f":: {tls_msg.content[ 'msg_type' ]} received\n" )
+      else :
+        print( f":: {tls_msg.content_type} received\n" )
 
 
     return tls_msg
@@ -422,14 +381,9 @@ class TLSByteStreamParser:
     self.byte_stream = self.byte_stream[ self.parse_record_layer_length() : ]
     tls_msg = TLSMsg( sender=self.sender)
     tls_msg.from_record_layer_bytes( record_layer )
-    ## plaintext fragment receive
     print( f"\n:: Receiving new plain text fragment" )
     if self.debug is not None:
       self.debug.handle_tls_record( tls_msg )  
-#      label = f"received TLS Record {self.tls_record_counter}"
-#      self.debug.trace_tls_msg( tls_msg, label="received TLS Record" )  
-##      self.debug.trace_bin( f"plaintext:", record_layer ) 
-##      print( f"plaintext_struct: {tls.FragmentTLSPlaintext.parse(record_layer)}" )
     ## if a cipher has been provided, application data is decrypted
     if tls_msg.content_type == 'application_data':
       tls_msg = tls_msg.decrypt_inner_msg( self.cipher, self.debug )
@@ -445,8 +399,6 @@ class TLSByteStreamParser:
     if self.fragment != b'':
       tls_msg = self.fragment_reassembly( )
       if tls_msg.content != None:
-        #if self.debug is not None:
-        #  self.debug.trace_tls_clear_text_msg( tls_msg, 'server' )
         return tls_msg
     ## when tls_message cannot be provided from self.fragment, 
     ## it is built from the reccord layer.
@@ -462,10 +414,6 @@ class TLSByteStreamParser:
         ## read an additional fragment  
         clear_text_fragment = self.next_clear_text_fragment( ) 
         tls_msg = self.fragment_reassembly( clear_text_fragment ) 
-#      if self.debug is not None:
-#        self.debug.trace_bin( f"handshake_message:", tls.Handshake.build( ) ) 
-#        print( f"plaintext_struct: {tls.FragmentTLSPlaintext.parse(record_layer)}" )
-        
     else:
       tls_msg = clear_text_fragment 
     if self.debug is not None:
@@ -514,7 +462,6 @@ class ClientHello( TLSMsg ):
     """
     self.tls_handshake = tls_handshake 
     self.lurk_client = lurk_client
-#    self.debug =  pytls13.debug.Debug( self.conf[ 'debug' ] )
     super().from_test_vector( self.debug.test_vector_file, 'client_client_hello' )
     self.tls_handshake.msg_list.append( self.content )
     if self.tls_handshake.is_ks_proposed( ) is True :
