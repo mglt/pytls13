@@ -24,12 +24,22 @@ if __name__ == '__main__' :
   parser = cli.get_parser( env=True, conf_dir=CS_GRAMINE_DIR )
   args = parser.parse_args()
 
-  print( f" --- Executing: {__file__} with {args}\n" )
+  print( f" --- Executing: {__file__} with {args}" )
 
   if args.gramine_build is True:
     subprocess.Popen( f"make clean && make SGX=1 DEBUG=1", shell=True )
     os._exit( 0 )
 
+  ## when no key is specified the key is generatyed in the
+  ## E_GRAMINE directory
+  if args.cert is None : 
+    if args.key is None :
+      args.cert = os.path.join( E_GRAMINE_DIR, 'sig_key_dir' )
+    else:  
+      args.cert = args.key ## only the directory    
+  if args.key is None and args.connectivity == "'lib_cs'":
+    args.key = args.cert ## dir    
+  
   ## when gramine is involved for the engine, the key and cert files 
   ## are copied into the E_GRAMINE_DIR/sig_dir_key and the 
   ## files are replaced by a relative path so they can be taken 
@@ -45,11 +55,12 @@ if __name__ == '__main__' :
                                E_GRAMINE_DIR, 'sig_key_dir' )
     args.cert = cli.copy_and_update_file_path( args.cert, \
                                E_GRAMINE_DIR, 'sig_key_dir' )
-
+  print( f"args.key: {args.key }" )
+  print( f"args.cert: {args.cert }" )
   
-  ## starting the CS
-  if args.connectivity == 'lib_cs':
-    os._exit( 0 )
+#  ## starting the CS
+#  if args.connectivity == 'lib_cs':
+#    os._exit( 0 )
   ## parameters are split between th eengine (e) (only), 
   ## the crytpo serviec (c)s (only) and shared 
   e_param = f"--freshness {args.freshness} "\
@@ -100,7 +111,7 @@ if __name__ == '__main__' :
 
 
   cmd = f"./start_e.py {e_param} {shared_param} {args.url}"
-##  print( f"cmd: {cmd}" ) 
+  print( f"cmd: {cmd}" ) 
   if args.gramine_sgx is False and args.gramine_direct is False:
   ##  with pylurk.cs.get_cs_instance( cs_conf.conf ) as cs:
   ##    cs.serve_forever()
