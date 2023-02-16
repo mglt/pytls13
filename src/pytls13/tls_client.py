@@ -135,7 +135,6 @@ class ClientTLS13Session:
     server = { 'ip' : ip, 'port' : port, 'fqdn':None }
     self.clt_conf[ 'server' ] = server
     
-    print( f"::Sending ClientHello to the server\n--->" )
     ch = pytls13.tls_client_handler.ClientHello( conf=self.clt_conf )
 #    if self.clt_conf[ 'debug' ][ 'test_vector' ] is True:
     if self.debug is not None and self.debug.test_vector is True:
@@ -145,19 +144,28 @@ class ClientTLS13Session:
       if self.tls_handshake.is_psk_proposed() is True:
         self.ks = ch.ks
     if self.debug is not None:
-      self.debug.handle_tls_clear_text_msg( ch, 'client' )
+      print( f":: C -> S: Sending {ch.content[ 'msg_type' ]}\n" )
+##      self.debug.handle_tls_clear_text_msg( ch, 'client' )
+      self.debug.handle_tls_record( ch )
     self.post_hand_auth = self.tls_handshake.is_post_hand_auth_proposed( )  
     self.c_init_client_hello = ch.c_init_client_hello
     self.s.sendall( ch.to_record_layer_bytes() )
     
-    self.stream_parser = pytls13.tls_client_handler.TLSByteStreamParser( self.s, debug=self.debug )
+    self.stream_parser = pytls13.tls_client_handler.TLSByteStreamParser( self.s, debug=self.debug, sender='server')
     while True:
       tls_msg = self.stream_parser.parse_single_msg( )
+#      if tls_msg.content_type == 'handshake':
+#        print( f":: S <- C: Receiving {tls_msg.content[ 'msg_type' ]}\n" )
+#      else :
+#        print( f":: S <- C: Receiving {tls_msg.content_type}\n" )
+
+      ## show_content.
       if tls_msg.content_type == 'handshake':
+#        print( f":: S <- C: Receiving {tls_msg.content[ 'msg_type' ]}\n--->" )
         #if self.debug is not None:
         #  self.debug.handle_tls_clear_text_msg( tls_msg, sender='server' ) 
         if tls_msg.content[ 'msg_type' ] == 'server_hello' : 
-          print( "--- Receiving ServerHello from the server\n--->" )
+#          print( "--- Receiving ServerHello from the server\n--->" )
           sh = pytls13.tls_client_handler.ServerHello( conf=self.clt_conf )
           self.ks = sh.handle_server_hello( self.lurk_client, ch, self.tls_handshake, self.ks, tls_msg ) 
           self.c_register_tickets = sh.c_register_tickets
@@ -214,71 +222,26 @@ class ClientTLS13Session:
                                      tls_msg.content[ 'description' ] )
 
       elif tls_msg.content_type == 'change_cipher_spec':
-        print( f"--- E <- TLS Server: Receiving ChangeCipherSpec from the server\n--->" )
-        if self.debug is not None:
-          self.debug.handle_tls_clear_text_msg( tls_msg, 'server' ) 
+#        print( f"--- E <- TLS Server: Receiving ChangeCipherSpec from the server\n--->" )
+#        if self.debug is not None:
+#          self.debug.handle_tls_clear_text_msg( tls_msg, 'server' ) 
         change_cipher_spec = True
       elif tls_msg.content_type == 'application_data':
         return tls_msg.content
       else:
         raise ValueError( f"unexpected packet received: "\
           f"type: {tls_msg.content_type} , content: {tls_msg.content}" )
-###      elif tls_msg.content_type == 'application_data' :
-###        print( f"--- E <- TLS Server: Receiving Application Data from the server\n--->" )
-###        inner_tls_msg = tls_msg.decrypt_inner_msg( s_h_cipher, self.debug )
-###        ## when decryp[tion cannot be performed an InvalidTag error is raised. 
-###        ## we bad_record_mac
-###        ## we should replace:
-###        ## try:
-###        ## 
-###        ## except InvalidTag:
-###        ## 
-###        ## raise TLSAlert (bad_record_mac, from client )
-###        ## responds with the alert to the TLS server 
-###        ## raise the alert on the TLS client side
-###        
-###        if inner_tls_msg.content_type == 'alert':
-###          raise  tls_handler.TLSAlert( inner_tls_msg.content[ 'level' ],\
-###                                       inner_tls_msg.content[ 'description' ] )
-###        elif inner_tls_msg.content_type == 'handshake' :
-###          ## Some servers carry handshake messages over multiple fragments  
-###          ## 
-###          if inner_tls_msg.content[ 'msg_type' ] == 'certificate_request':
-###            pylurk.debug.print_bin( "built certificate_request", pytls13.struct_tls13.Handshake.build( inner_tls_msg.content ) ) 
-###          elif inner_tls_msg.content[ 'msg_type' ] == 'certificate':
-###            certificate = pytls13.tls_client_handler.Certificate( content=inner_tls_msg.content, sender='server' )
-###            server_public_key = certificate.get_public_key( )            
-###          elif inner_tls_msg.content[ 'msg_type' ] == 'certificate_verify':
-###            self.tls_handshake.is_certificate_request( )
-###            certificate_verify = pytls13.tls_client_handler.CertificateVerify( conf=self.clt_conf, content=inner_tls_msg.content, sender='server' )
-###            certificate_verify.check_signature( self.tls_handshake, server_public_key )
-###            ## we do update the transcript similarly to the server
-###            ## but also keep track of the handshake that we will need 
-###            ## to provide to the cs.
-###          elif inner_tls_msg.content[ 'msg_type' ] == 'finished':
-###            sf = pytls13.tls_client_handler.Finished( content=inner_tls_msg.content, sender='server' )
-###            sf.check_verify_data( self.tls_handshake, self.ks )       
-###            
-###            self.tls_handshake.msg_list.append( inner_tls_msg.content )
-###            tmp_handshake.append( inner_tls_msg.content )
-###            break
-###          self.tls_handshake.msg_list.append( inner_tls_msg.content )
-###          tmp_handshake.append( inner_tls_msg.content )
-###        elif inner_tls_msg.content_type == 'application_data':
-###          return inner_tls_msg.content
-###        else:
-###          raise ValueError( f"unexpected packet received: "\
-###            f"type: {inner_tls_msg.content_type} , content: {inner_tls_msg.content}" )
 
     if change_cipher_spec_received is True:
-      print( "--- E -> TLS Server : Change Cipher Spec" )
+      print( f":: C -> S: Sending {tls_msg.content_type}\n" )
+#      print( "--- E -> TLS Server : Change Cipher Spec" )
       tls_msg.content= { 'type' : 'change_cipher_spec' }
       tls_msg.content_type = 'change_cipher_spec'
       tls_msg.show()
       self.s.sendall( tls_msg.to_record_layer_bytes( ) )
       
     
-    print( "--- E -> CS: Application Secrets / Signature" )
+#    print( "--- E -> CS: Application Secrets / Signature" )
     ## At this stage the Engine performs the following tasks:
     ## 1) computation of the application secrets and 
     ## 2) the necessary messages to be sent to the TLS server.    
@@ -316,6 +279,7 @@ class ClientTLS13Session:
         ## generates the certificate
         client_cert = pytls13.tls_client_handler.Certificate( conf=self.clt_conf, content={}, sender='client' )
         client_cert.init_from_conf( )
+#        print( f":: C -> S: Sending {client_cert.content[ 'msg_type' ]}\n" )
         client_cert.encrypt_and_send( cipher=c_h_cipher, socket=self.s, sender='client', debug=self.debug ) 
         self.tls_handshake.msg_list.append( client_cert.content )
         tmp_handshake.append( client_cert.content )
@@ -323,6 +287,7 @@ class ClientTLS13Session:
         client_cert_verify = pytls13.tls_client_handler.CertificateVerify( conf=self.clt_conf, sender='client' )
         client_cert_verify.handle_c_client_finished( self.lurk_client, self.ks, tmp_handshake, self.c_register_tickets )
         self.tls_handshake.msg_list.append(  client_cert_verify.content )
+#        print( f":: C -> S: Sending {client_cert_verify.content[ 'msg_type' ]}\n" )
         client_cert_verify.encrypt_and_send( cipher=c_h_cipher, socket=self.s, sender='client', debug=self.debug ) 
       ## the TLS client is not authenticated
       ## There is no client_cert_verify message but we use the 
@@ -346,13 +311,15 @@ class ClientTLS13Session:
 
         client_cert = pytls13.tls_client_handler.Certificate( conf=self.clt_conf, content={}, sender='client' )
         client_cert.init_from_conf( )
+#        print( f":: C -> S: Sending {client_cert.content[ 'msg_type' ]}\n" )
         client_cert.encrypt_and_send( cipher=c_h_cipher, socket=self.s, sender='client', debug=self.debug ) 
         self.tls_handshake.msg_list.append( client_cert.content )
         tmp_handshake.append( client_cert.content )
-        print( f"--- client certificate: {client_cert.content}" )
+#        print( f"--- client certificate: {client_cert.content}" )
         client_cert_verify = pytls13.tls_client_handler.CertificateVerify( conf=self.clt_conf, sender='client' )
         client_cert_verify.handle_c_init_client_finished( self.lurk_client, self.ks, tmp_handshake, self.c_register_tickets )
         self.tls_handshake.msg_list.append(  client_cert_verify.content )
+#        print( f":: C -> S: Sending {client_cert_verify.content[ 'msg_type' ]}\n" )
         client_cert_verify.encrypt_and_send( cipher=c_h_cipher, socket=self.s, sender='client', debug=self.debug ) 
         
       ## TLS client is not authenticated
@@ -361,7 +328,8 @@ class ClientTLS13Session:
       else:
         self.ks.process( [ 'a_s', 'a_c' ], self.tls_handshake ) 
     
-    print( "--- E -> TLS Server: Sending Client Finished" )
+#    print( f":: C -> S: Sending {client_finished.content[ 'msg_type' ]}\n" )
+#    print( "--- E -> TLS Server: Sending Client Finished" )
     self.tls_handshake.update_finished( self.ks )
     client_finished = pytls13.tls_client_handler.Finished( conf=self.clt_conf, content=self.tls_handshake.msg_list[ -1 ], sender='client' )
     client_finished.encrypt_and_send( cipher=c_h_cipher, socket=self.s, sender='client', debug=self.debug ) 

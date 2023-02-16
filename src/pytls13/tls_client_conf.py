@@ -119,11 +119,11 @@ class Configuration( pylurk.conf.Configuration ) :
     init_cs_conf = {}
     if 'cs' in self.conf.keys():
       init_cs_conf = self.conf[ 'cs' ]
-    print( f" --- init_cs_conf: {init_cs_conf}" )
+##    print( f" --- init_cs_conf: {init_cs_conf}" )
     ## merging init_cs 
     self.cs_conf.merge( init_cs_conf )
     lurk_client_connectivity = self.conf[ 'lurk_client' ][ 'connectivity' ]
-    print( f" --- lurk_client_connectivity: {lurk_client_connectivity}" )
+##    print( f" --- lurk_client_connectivity: {lurk_client_connectivity}" )
     if lurk_client_connectivity[ 'type' ] == 'lib_cs' :
       ## in that modul this is the only possibility
       self.cs_conf.set_role( 'client' )

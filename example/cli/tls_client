@@ -24,7 +24,7 @@ if __name__ == '__main__' :
   parser = cli.get_parser( env=True, conf_dir=CS_GRAMINE_DIR )
   args = parser.parse_args()
 
-  print( f" --- Executing: {__file__} with {args}" )
+  print( f" --- Executing: {__file__} with {args}\n" )
 
   if args.gramine_build is True:
     subprocess.Popen( f"make clean && make SGX=1 DEBUG=1", shell=True )
@@ -100,7 +100,7 @@ if __name__ == '__main__' :
 
 
   cmd = f"./start_e.py {e_param} {shared_param} {args.url}"
-  print( f"cmd: {cmd}" ) 
+##  print( f"cmd: {cmd}" ) 
   if args.gramine_sgx is False and args.gramine_direct is False:
   ##  with pylurk.cs.get_cs_instance( cs_conf.conf ) as cs:
   ##    cs.serve_forever()

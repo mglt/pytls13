@@ -20,7 +20,7 @@ if __name__ == '__main__' :
   cli = pytls13.tls_client_conf.CLI( )
   parser = cli.get_parser( env=True )
   args = parser.parse_args()
-  print( f" --- Executing: {__file__} with {args}" )
+  print( f" --- Executing: {__file__} with {args}\n" )
   ## Building the template (in general expected to
   ## be manually generated )
   cli.init_from_args( args )
@@ -29,7 +29,7 @@ if __name__ == '__main__' :
   print( 'Configuration Template (from end user arguments ):\n' )
   pprint.pprint( e_template_conf, width=65, sort_dicts=False )
   tls_client = pytls13.tls_client.SimpleTLS13Client( e_template_conf )
-  print( 'Full configuration:\n' )
+  print( '\nFull configuration:\n' )
   pprint.pprint( tls_client.conf,  width=65, sort_dicts=False )
 
   ip = tls_client.conf[ 'destination' ][ 'ip' ]
