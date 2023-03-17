@@ -344,12 +344,13 @@ class TLSByteStreamParser:
     ## we only do that for handshake as other message 
     ## are not impacted by fragmentation
     if self.debug is not None and tls_message is not None:
-      self.debug.trace_bin( f"handshake_message:", tls_message_bytes ) 
-      print( f"handshake_message: {tls_message}" )
-      if tls_msg.content_type == 'handshake':
-        print( f":: {tls_msg.content[ 'msg_type' ]} received\n" )
-      else :
-        print( f":: {tls_msg.content_type} received\n" )
+      if self.debug.trace is True:  
+        self.debug.trace_bin( f"handshake_message:", tls_message_bytes ) 
+        print( f"handshake_message: {tls_message}" )
+        if tls_msg.content_type == 'handshake':
+          print( f":: {tls_msg.content[ 'msg_type' ]} received\n" )
+        else :
+          print( f":: {tls_msg.content_type} received\n" )
 
 
     return tls_msg
@@ -381,14 +382,16 @@ class TLSByteStreamParser:
     self.byte_stream = self.byte_stream[ self.parse_record_layer_length() : ]
     tls_msg = TLSMsg( sender=self.sender)
     tls_msg.from_record_layer_bytes( record_layer )
-    print( f"\n:: Receiving new plain text fragment" )
     if self.debug is not None:
-      self.debug.handle_tls_record( tls_msg )  
+      if self.debug.trace is True:
+        print( f"\n:: Receiving new plain text fragment" )
+        self.debug.handle_tls_record( tls_msg )  
     ## if a cipher has been provided, application data is decrypted
     if tls_msg.content_type == 'application_data':
       tls_msg = tls_msg.decrypt_inner_msg( self.cipher, self.debug )
     if self.debug is not None:
-      self.debug.server_tls_record_counter += 1
+      if self.debug.trace is True :
+        self.debug.server_tls_record_counter += 1
     return tls_msg
 
   def parse_single_msg( self )-> dict:
@@ -417,12 +420,13 @@ class TLSByteStreamParser:
     else:
       tls_msg = clear_text_fragment 
     if self.debug is not None:
-      self.debug.handle_tls_msg( tls_msg )  
-      self.debug.server_tls_msg_counter += 1
-      if tls_msg.content_type == 'handshake':
-        print( f":: {tls_msg.content[ 'msg_type' ]} received\n" )
-      else :
-        print( f":: {tls_msg.content_type} received\n" )
+      if self.debug.trace is True :
+        self.debug.handle_tls_msg( tls_msg )  
+        self.debug.server_tls_msg_counter += 1
+        if tls_msg.content_type == 'handshake':
+          print( f":: {tls_msg.content[ 'msg_type' ]} received\n" )
+        else :
+          print( f":: {tls_msg.content_type} received\n" )
 
 
     return tls_msg
@@ -623,8 +627,9 @@ class ClientHello( TLSMsg ):
           binder_finished_key_list.append( ks.finished_key( role='binder' ) )
           self.ks_list.append( ks )
           if self.debug is not None:
-            self.debug.handle_bin( f"binder_key ({index})", ks.secrets[ 'b' ] )
-            self.debug.handle_bin( f"binder_finished_key ({index})", ks.finished_key(  role='binder') )
+            if self.debug.trace is True:
+              self.debug.handle_bin( f"binder_key ({index})", ks.secrets[ 'b' ] )
+              self.debug.handle_bin( f"binder_finished_key ({index})", ks.finished_key(  role='binder') )
         ## updating ks[0] (ks_list is non empty as psk has been proposed
         for s in lurk_resp[ 'payload' ][ 'secret_list' ]:
           self.ks_list[ 0 ].secrets[ s[ 'secret_type' ] ] = s[ 'secret_data' ] 
@@ -974,6 +979,7 @@ class Finished( ClientHello ):
 #    self.content = {
 #      'msg_type' : 'finished',
 #      'data' : {'verify_data' : token_bytes( 32 )}}
+    self.debug =  pytls13.debug.Debug( self.conf[ 'debug' ] )
  
   def check_verify_data( self, tls_handshake, ks ):
 #    c_verify_data = tls_handshake.get_verify_data( ks, role='server',\
@@ -983,8 +989,11 @@ class Finished( ClientHello ):
       c_verify_data = tls_handshake.get_verify_data( ks, role='server',\
                       transcript_mode='server finished') 
       s_verify_data =  self.content[ 'data' ][ 'verify_data' ]
-      pylurk.debug.print_bin( "client computed verify_data", c_verify_data )
-      pylurk.debug.print_bin( "server provided verify_data", s_verify_data )
+
+      if self.debug is not None:
+        if self.debug.trace is True:   
+          pylurk.debug.print_bin( "client computed verify_data", c_verify_data )
+          pylurk.debug.print_bin( "server provided verify_data", s_verify_data )
       if c_verify_data != s_verify_data : 
         raise ValueError( "Client unable to validate Finished message" )
 
@@ -1039,15 +1048,15 @@ class CertificateVerify( TLSMsg ):
 #      if m[ 'msg_type' ] == 'certificate' :
 #        handshake_msg_list.remove( m ) 
 #        cert_list.append( m )
-    print( f"--- handshake_msg_list {handshake_msg_list}" )
+#    print( f"--- handshake_msg_list {handshake_msg_list}" )
     cert_list = [ ]
     for m in handshake_msg_list:
       if m[ 'msg_type' ] == 'certificate' :
         cert_list.append( m )
     for cert in cert_list:
       handshake_msg_list.remove( cert )
-    print( f"--- cert_list {cert_list}" )
-    print( f"--- handshake_msg_list {handshake_msg_list}" )
+#    print( f"--- cert_list {cert_list}" )
+#    print( f"--- handshake_msg_list {handshake_msg_list}" )
     if len( cert_list ) == 2:
       server_cert = { 'cert_type' : 'uncompressed', 'certificate' : cert_list[ 0 ][ 'data' ] } 
       client_cert = { 'cert_type' : 'uncompressed', 'certificate' : cert_list[ 1 ][ 'data' ] } 

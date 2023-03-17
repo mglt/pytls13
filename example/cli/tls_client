@@ -27,16 +27,61 @@ if __name__ == '__main__' :
   print( f" --- Executing: {__file__} with {args}" )
 
   if args.gramine_build is True:
-    subprocess.Popen( f"make clean && make SGX=1 DEBUG=1", shell=True )
+    if args.debug is True:  
+      subprocess.Popen( f"make clean && make SGX=1 DEBUG=1", shell=True )
+    else :
+      subprocess.Popen( f"make clean && make SGX=1 DEBUG=0", shell=True )
     os._exit( 0 )
 
-  ## when no key is specified the key is generatyed in the
-  ## E_GRAMINE directory
+
+  ## when no key is specified the key is generated in the
+  ## E_GRAMINE directory.
+  ## when the cert is not specified, 1) either the cert directory 
+  ## is the same as the one of the key or 2) we provide a 
+  ## default directory.
+  ## 
+  ## When cert is not specified, we first define the appropriated
+  ## directory in which th ecert_file needs to be put.
   if args.cert is None : 
     if args.key is None :
-      args.cert = os.path.join( E_GRAMINE_DIR, 'sig_key_dir' )
+      ## cert_dir is set to the default   
+      cert_dir = os.path.join( E_GRAMINE_DIR, 'sig_key_dir' )
+#      args.cert = os.path.join( E_GRAMINE_DIR, 'sig_key_dir' )
     else:  
-      args.cert = args.key ## only the directory    
+      ## cert_dir is set to the same directory as the one of the 
+      ## private key
+      if os.path.exists( args.key ) : 
+        if os.path.isfile( args.key ) :
+          cert_dir = os.path.dirname( args.key )    
+        elif os.path.isdir( args.key ) :
+          cert_dir = args.key 
+        else:
+          raise ValueError( f"Unable to determine 'cert'. Either "\
+                  f"'cert' MUST be provided explicitly or 'key' "\
+                  f"MUST be a file or a directory. cert: {args.cert} "\
+                  f" key: {args.key} " )
+      ## if args.key does not exist, it becomes harder distinguish 
+      ## what is a file or a directory.
+      ## we assume file ends in .der
+      else:
+        if '.der' in args.key[-5: ]:
+          cert_dir = os.path.dirname( args.key )    
+        else:       
+          cert_dir = args.key   
+
+#      args.cert = args.key ## only the directory
+    args.cert = cert_dir
+
+  ## at this point args.cert is either a file or a directory
+  ## We only provide a default 
+  ## A directory is an indication that the files needs to be 
+  ## generated.
+  ## As ide effect is that even if the default file exists it
+  ## will be re-generated.
+
+  ## we convert it to an absolute path - to avoid confusion
+  args.cert = os.path.abspath( args.cert )
+
   if args.key is None and args.connectivity == "'lib_cs'":
     args.key = args.cert ## dir    
   

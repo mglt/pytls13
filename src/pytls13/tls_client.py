@@ -185,7 +185,7 @@ class ClientTLS13Session:
         elif tls_msg.content[ 'msg_type' ] == 'certificate_request':
           pylurk.debug.print_bin( "built certificate_request", pytls13.struct_tls13.Handshake.build( tls_msg.content ) ) 
         elif tls_msg.content[ 'msg_type' ] == 'certificate':
-          certificate = pytls13.tls_client_handler.Certificate( content=tls_msg.content, sender='server' )
+          certificate = pytls13.tls_client_handler.Certificate( conf=self.clt_conf, content=tls_msg.content, sender='server' )
           server_public_key = certificate.get_public_key( )            
         elif tls_msg.content[ 'msg_type' ] == 'certificate_verify':
           self.tls_handshake.is_certificate_request( )
@@ -195,7 +195,7 @@ class ClientTLS13Session:
           ## but also keep track of the handshake that we will need 
           ## to provide to the cs.
         elif tls_msg.content[ 'msg_type' ] == 'finished':
-          sf = pytls13.tls_client_handler.Finished( content=tls_msg.content, sender='server' )
+          sf = pytls13.tls_client_handler.Finished( conf=self.clt_conf, content=tls_msg.content, sender='server' )
           sf.check_verify_data( self.tls_handshake, self.ks )       
           
           self.tls_handshake.msg_list.append( tls_msg.content )
@@ -336,14 +336,23 @@ class ClientTLS13Session:
     """
     self.stream_parser.read_bytes( )
    
+#    while True:
+#      tls_msg = self.stream_parser.parse_single_msg( )
+#      if tls_msg.content_type == 'handshake':
+#        if tls_msg.content[ 'msg_type' ] == 'server_hello' :
+#      elif tls_msg.content_type == 'application_data':
+#        return tls_msg.content
+    application_data = b''
     while self.stream_parser.byte_stream != b'' :
       tls_msg = self.stream_parser.parse_single_msg( )
       if tls_msg.content_type == 'alert':
-        raise  pytls13.tls_handler.ServerTLSAlert( \
-                tls_msg.content[ 'level' ], \
-                tls_msg.content[ 'description' ] )
+        if tls_msg.content[ 'level' ] == 'error' :  
+          raise  pytls13.tls_handler.ServerTLSAlert( \
+                   tls_msg.content[ 'level' ], \
+                   tls_msg.content[ 'description' ] )
       elif tls_msg.content_type == 'application_data':
-        return tls_msg.content
+#        return tls_msg.content
+        application_data += tls_msg.content
       elif tls_msg.content_type == 'handshake':
         if tls_msg.content[ 'msg_type' ] == 'new_session_ticket':
           new_session_ticket = pytls13.tls_client_handler.NewSessionTicket( conf=self.clt_conf, content=tls_msg.content )
@@ -364,7 +373,7 @@ class ClientTLS13Session:
       ## In that case, one reads the full packet.
       ## this woudl need to have the socket in a non blocking state
       ## self.stream_parser.read_bytes( bufsize=1024, socket.MSG_DONTWAIT)
-
+    return application_data
   def close( self ):
     self.s.close( )
 

@@ -267,7 +267,8 @@ class CLI( pylurk.conf.CLI ):
     ## only net_loc 
     if len( netloc_path ) == 1:
       netloc = netloc_path[ 0 ]
-      path = '/index.html'
+#      path = '/index.html'
+      path = '/'
     else:
       netloc = netloc_path[ 0 ]
       path = netloc_path[ len( netloc ) - 1 : ]
@@ -301,8 +302,11 @@ class CLI( pylurk.conf.CLI ):
     destination_template[ 'ip' ] = ip
     destination_template[ 'port' ] = port
     if scheme == 'https' :
-      sent_data = f"GET {path} HTTP/1.1\n Host: {host}\n" 
-      sent_data = sent_data.encode( encoding = 'utf-8' )
+      sent_data = f"GET {path} HTTP/1.1\r\n" +\
+                  f"Host: {host}\r\n" +\
+                  f"user-agent: pytls13/0.1\r\n" +\
+                  f"accept: */*\r\n\r\n"
+      sent_data = sent_data.encode( encoding = 'utf-8' )            
     else: 
       sent_data = b''
     return destination_template, sent_data
