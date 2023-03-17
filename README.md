@@ -723,6 +723,7 @@ After this operation, 3,976 kB of additional disk space will be used.
 Do you want to continue? [Y/n] Y
 ```
 
+The results shows that AESMD and SGX PSW has been successfully installed.
  
 ```
 $ is-sgx-available
@@ -752,8 +753,122 @@ Attestation is passed to the Makfile via specific arguments:
 
 ```
 For epid with the unlinkable attestation building the encl;ave is performed as follows:
-
+make clean
+rm -f *.manifest *.manifest.sgx *.token *.sig OUTPUT* *.PID TEST_STDOUT TEST_STDERR
+rm -f -r scripts/__pycache__
 make SGX=1 RA_TYPE=epid RA_CLIENT_SPID=3A2053D125F7AB3642C3FAC6A22BABFD RA_CLIENT_LINKABLE=0
+gramine-manifest \
+        -Dlog_level=error \
+        -Darch_libdir=/lib/x86_64-linux-gnu \
+        -Dentrypoint=/usr/bin/python3.10 \
+        -Dra_type=epid \
+        -Dra_client_spid=3A2053D125F7AB3642C3FAC6A22BABFD \
+        -Dra_client_linkable=0 \
+        python.manifest.template >python.manifest
+gramine-sgx-sign \
+        --manifest python.manifest \
+        --output python.manifest.sgx
+Attributes:
+    size:        0x20000000
+    thread_num:  32
+    isv_prod_id: 29539
+    isv_svn:     0
+    attr.flags:  0x4
+    attr.xfrm:   0x3
+    misc_select: 0x0
+SGX remote attestation:
+    EPID (spid = `3A2053D125F7AB3642C3FAC6A22BABFD`, linkable = False)
+Memory:
+    000000001f9b4000-0000000020000000 [REG:R--] (manifest) measured
+    000000001f8b4000-000000001f9b4000 [REG:RW-] (ssa) measured
+    000000001f894000-000000001f8b4000 [TCS:---] (tcs) measured
+    000000001f874000-000000001f894000 [REG:RW-] (tls) measured
+    000000001f834000-000000001f874000 [REG:RW-] (stack) measured
+    000000001f7f4000-000000001f834000 [REG:RW-] (stack) measured
+    000000001f7b4000-000000001f7f4000 [REG:RW-] (stack) measured
+    000000001f774000-000000001f7b4000 [REG:RW-] (stack) measured
+    000000001f734000-000000001f774000 [REG:RW-] (stack) measured
+    000000001f6f4000-000000001f734000 [REG:RW-] (stack) measured
+    000000001f6b4000-000000001f6f4000 [REG:RW-] (stack) measured
+    000000001f674000-000000001f6b4000 [REG:RW-] (stack) measured
+    000000001f634000-000000001f674000 [REG:RW-] (stack) measured
+    000000001f5f4000-000000001f634000 [REG:RW-] (stack) measured
+    000000001f5b4000-000000001f5f4000 [REG:RW-] (stack) measured
+    000000001f574000-000000001f5b4000 [REG:RW-] (stack) measured
+    000000001f534000-000000001f574000 [REG:RW-] (stack) measured
+    000000001f4f4000-000000001f534000 [REG:RW-] (stack) measured
+    000000001f4b4000-000000001f4f4000 [REG:RW-] (stack) measured
+    000000001f474000-000000001f4b4000 [REG:RW-] (stack) measured
+    000000001f434000-000000001f474000 [REG:RW-] (stack) measured
+    000000001f3f4000-000000001f434000 [REG:RW-] (stack) measured
+    000000001f3b4000-000000001f3f4000 [REG:RW-] (stack) measured
+    000000001f374000-000000001f3b4000 [REG:RW-] (stack) measured
+    000000001f334000-000000001f374000 [REG:RW-] (stack) measured
+    000000001f2f4000-000000001f334000 [REG:RW-] (stack) measured
+    000000001f2b4000-000000001f2f4000 [REG:RW-] (stack) measured
+    000000001f274000-000000001f2b4000 [REG:RW-] (stack) measured
+    000000001f234000-000000001f274000 [REG:RW-] (stack) measured
+    000000001f1f4000-000000001f234000 [REG:RW-] (stack) measured
+    000000001f1b4000-000000001f1f4000 [REG:RW-] (stack) measured
+    000000001f174000-000000001f1b4000 [REG:RW-] (stack) measured
+    000000001f134000-000000001f174000 [REG:RW-] (stack) measured
+    000000001f0f4000-000000001f134000 [REG:RW-] (stack) measured
+    000000001f0b4000-000000001f0f4000 [REG:RW-] (stack) measured
+    000000001f074000-000000001f0b4000 [REG:RW-] (stack) measured
+    000000001f064000-000000001f074000 [REG:RW-] (sig_stack) measured
+    000000001f054000-000000001f064000 [REG:RW-] (sig_stack) measured
+    000000001f044000-000000001f054000 [REG:RW-] (sig_stack) measured
+    000000001f034000-000000001f044000 [REG:RW-] (sig_stack) measured
+    000000001f024000-000000001f034000 [REG:RW-] (sig_stack) measured
+    000000001f014000-000000001f024000 [REG:RW-] (sig_stack) measured
+    000000001f004000-000000001f014000 [REG:RW-] (sig_stack) measured
+    000000001eff4000-000000001f004000 [REG:RW-] (sig_stack) measured
+    000000001efe4000-000000001eff4000 [REG:RW-] (sig_stack) measured
+    000000001efd4000-000000001efe4000 [REG:RW-] (sig_stack) measured
+    000000001efc4000-000000001efd4000 [REG:RW-] (sig_stack) measured
+    000000001efb4000-000000001efc4000 [REG:RW-] (sig_stack) measured
+    000000001efa4000-000000001efb4000 [REG:RW-] (sig_stack) measured
+    000000001ef94000-000000001efa4000 [REG:RW-] (sig_stack) measured
+    000000001ef84000-000000001ef94000 [REG:RW-] (sig_stack) measured
+    000000001ef74000-000000001ef84000 [REG:RW-] (sig_stack) measured
+    000000001ef64000-000000001ef74000 [REG:RW-] (sig_stack) measured
+    000000001ef54000-000000001ef64000 [REG:RW-] (sig_stack) measured
+    000000001ef44000-000000001ef54000 [REG:RW-] (sig_stack) measured
+    000000001ef34000-000000001ef44000 [REG:RW-] (sig_stack) measured
+    000000001ef24000-000000001ef34000 [REG:RW-] (sig_stack) measured
+    000000001ef14000-000000001ef24000 [REG:RW-] (sig_stack) measured
+    000000001ef04000-000000001ef14000 [REG:RW-] (sig_stack) measured
+    000000001eef4000-000000001ef04000 [REG:RW-] (sig_stack) measured
+    000000001eee4000-000000001eef4000 [REG:RW-] (sig_stack) measured
+    000000001eed4000-000000001eee4000 [REG:RW-] (sig_stack) measured
+    000000001eec4000-000000001eed4000 [REG:RW-] (sig_stack) measured
+    000000001eeb4000-000000001eec4000 [REG:RW-] (sig_stack) measured
+    000000001eea4000-000000001eeb4000 [REG:RW-] (sig_stack) measured
+    000000001ee94000-000000001eea4000 [REG:RW-] (sig_stack) measured
+    000000001ee84000-000000001ee94000 [REG:RW-] (sig_stack) measured
+    000000001ee74000-000000001ee84000 [REG:RW-] (sig_stack) measured
+    000000001ea57000-000000001ea9b000 [REG:R-X] (code) measured
+    000000001ea9c000-000000001ee74000 [REG:RW-] (data) measured
+    0000000000010000-000000001ea57000 [REG:RWX] (free)
+Measurement:
+    cf87a22ff47cad9ff447705489a19b342de06bb6584bab62a06c359bb0b68c3f
+gramine-sgx-get-token --output python.token --sig python.sig
+Attributes:
+    mr_enclave:  cf87a22ff47cad9ff447705489a19b342de06bb6584bab62a06c359bb0b68c3f
+    mr_signer:   e725999b742f47419e5a074b32d8c869711d68d20d059dc987e5c87424cb37a9
+    isv_prod_id: 29539
+    isv_svn:     0
+    attr.flags:  0000000000000004
+    attr.xfrm:   0000000000000003
+    mask.flags:  ffffffffffffffff
+    mask.xfrm:   fffffffffff9ff1b
+    misc_select: 00000000
+    misc_mask:   ffffffff
+    modulus:     f19f15a643fbadc6714cbe9e8d670a8a...
+    exponent:    3
+    signature:   b7739d76c71f078883915d3b6ea574fb...
+    date:        2023-03-16
+```
 
 Starting the enclave is performed as follows:
 
