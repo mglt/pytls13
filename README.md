@@ -1,14 +1,18 @@
 
 # Introduction of TLS 1.3 with LURK-T
 
+
+## Architecture
+
 `pytls13` is a proof of concept of TLS 1.3  designed with Limited Use of Remote Keys with Added Trust (LURK-T).
+The ultimate goal of LURK-T is to leverage Trusted Execution Environment (TEE) to ensure **Trustworthy TLS authentication credentials**.
 
+Unlike standard TLS 1.3 libraries, `pytls13` splits the library into two sub modules as depicted below:
 
-Unlike standard TLS 1.3 libraries, `pytls13` splits the library into two submodules as depicted below:
-* a Cryptographic Service (CS) responsible to host the authentication credentials (secret key, PSK, ...) and perform all associaed cryptographic operations.
+* a Cryptographic Service (CS) responsible to host the authentication credentials (secret key, PSK, ...) and perform all associated cryptographic operations.
 * a TLS Engine (E) responsible to interact with the CS to handle the TLS 1.3 Handshake 
 
-The communication between E and CS is defined in the TLS 1.3 extension of the general LURK framework design to provide various types of crypographic -based micro-services.
+The communication between E and CS is defined in the TLS 1.3 extension of the general LURK framework design to provide various types of cryptographic -based micro-services.
    
 ```
 +----------------------------+                         
@@ -21,34 +25,278 @@ The communication between E and CS is defined in the TLS 1.3 extension of the ge
 +----------------------------+
 ```
 
-When the CS runs into a Trusted Enecution Environement (TEE), `pytls13` enables __a trustworthy deployment of TLS in untrusted environment__. 
+When the CS runs into a Trusted Execution Environment (TEE), `pytls13` enables __a trustworthy deployment of TLS in untrusted environment__. 
 More specifically, LURK-T secures the cryptographic credentials and prevent their leaks against vulnerabilities either of the upper layer application or the infrastructure. 
 
-The figure below illustrates, except the CS that runs in a TEE, all other components are subject to lateral attacks by any other component sharing the ressources as well as static analyses by the cloud provider. 
+The figure below compares the deployment of TLS using a LURK-T versus the deployment of a standard TLS deployment.
+In a standard deployment, the TLS library completely runs in an untrusted environment which opens the TLS library to:
+* Lateral Attacks (A): Lateral attacks are performed by any __other__ applications than the TLS library, which includes any application the cloud provider may be hosting but also the legitimate application for which the TLS library is expected to provide a protection. 
+* Cloud Provider (B): The cloud provider can access any hosting resources such as the RAM in which the TLS private key is stored. 
+ 
+With LURK-T, the CS hosts the private keys and other authentication credentials.
+Having the CS running in to a TEE considerably limit the exposure of the credentials to interface provided by LURK. 
+The TEE enclave enforces an isolation that is likely to be the most secure isolation that can be performed today.
+More precisely, this isolation is enforced by the CPU. 
+Note that other isolation mechanisms may also be used including running the E and CS in different processes. At that point isolation is guaranteed by the OS as opposed to the CPU.    
  
 
 ```
- +---------------+  +---------------+  
- | Upper Layer   |  | Upper Layer   |   <#######
- | Application 1 |  | Application 2 |    Lateral 
- +---------------+  +---------------+    Attacks
- |       E       |  | Standard TLS  |
- +--- ---^-------+  |  Library      |   <####### 
-         |          +---------------+ 
----------|-------------------^----
- +=======v=======+           #
- |    CS (TEE)   |           #
- +===============+  Cloud Provider 
+     LURK-T           Standard TLS
+                      Library    
+ +-------------+  +--------------+  
+ | Upper Layer |  | Upper Layer  |   <#######
+ | Application |  | Application  |    Lateral 
+ +-------------+  +--------------+    Attacks
+ |       E     |  | Standard TLS |     (A)
+ +------ ^-----+  |  Library     |   <####### 
+         |        +--------------+ 
+---------|-----------------^------
+ +=======v=====+           #
+ |   CS (TEE)  |           #
+ +=============+  Cloud Provider (B)
                  
 ```
 
-Case 1: Upon any suspected attacks or any disclosed vulnarability.
-*  upper layer application 2 MUST be patched and authentication credential MUST be re-issued, as it has not guarantee, these have not been leaked. 
-* upper layer application 2 simply needs to be patched, authentication credential remain trustworthy.  
+LURK-T does not protects the TLS session keys and limits its scope to the keeping authentication credentials trustworthy.
+This provides for example the following operational and concrete advantages.
 
-Case 2: Changing Cloud provider
-*  upper layer application 2 on the new cloud provider MUST be re-issued, as it has not guarantee, these are known by the former cloud provider. 
-* upper layer application 1 simply needs to be instantiated on the new cloud provider - smoothing the migration.  
+## Examples
+
+Example 1: Upon suspected attacks or any disclosed vulnerabilities, upper layer application MUST be patched.
+In the case of a standard TLS Library,  and authentication credential MUST be re-issued, there are no guarantee authentication credentials  have not been leaked and as such ALL authentication credentials MUST be re-issued.
+This is not the case with LURK-T.  
+
+Example 2: Upon changing Cloud provider, deployment that considered a Standard TLS library MUST be re-issued as these have been shared with the former Cloud provider. 
+With LURK-T the deployment can change cloud providers and benefit from elastic resources from any Cloud provider without impacting the trustworthiness of the credentials.   
+
+## Why not protecting more than authentication credentials ?
+
+One can reasonably wonder why limiting the protection provided by TEE to only the authentication credential as opposed to the full TLS library, for example  which would include  some protection of the session keys. 
+
+The short answer is that the additional security provided is very limited with a huge cost associated.
+The cost can be easily understood by considering that any interaction with an enclave requires a very heavy context switching. In particular, for SGX enclaves, the interaction between TEE and REE results in 8,200 - 17,000 cycles overhead, as opposed to 150 cycles for a standard system call.
+With such paradigm, network application like TLS undergo a huge penalty as incoming always come from outside the enclave. 
+Respectively outgoing packets are going outside the enclave as well.  
+
+
+On the other hand, that overhead needs to be balanced with the security advantages, it could provide.
+Securing the TLS session keys, and the encryption process provides little advantages unless the application itself is trusted. 
+As a result, the Upper Layer Application is also expected to be in the enclave.
+However, depending on the complexity of the application, the application MAY likely contain a bunch of potential vulnerabilities and as such expose the TLS sessions keys and authentication credentials to a large surface of attack. 
+
+As a result, one MUST not forget that one reason LURK-T provides the expected security is that in addition to isolating the authentication credential, it provides a very limited ways to interact with these authentication credentials, implemented in a relatively few Line of Codes to limit the probabilities to introduce some vulnerabilities.      
+
+We cannot undermine that technology will evolve and that at some points, the overhead associated to context switching might become acceptable in term of performance.
+In that case, isolating the CS within the TEE via some hypervisor, nested enclaves would remain areas to investigate.
+
+# Remote Attestation and RA-TLS
+
+While the architecture of the LURK-T TLS remains pretty simple, it remains challenging to set up the CS in a remote data center provisioned with the private key that we do not share with the data center.
+This is done in two steps:
+
+1. Ensuring the *expected* CS has been loaded into the TEE (of a remote Cloud provider) 
+2. Provisioning the private key via a TLS channel that is terminated into this *attested* Enclave.
+
+
+Defining the Certificate based identity enclave by the *Software Vendor*
+with an enclave building tool chain.
+```
++--------------------+  +------------+ +-----------------+
+| Enclave            |  | Software   | | Software vendor |
++--------------------+  +------------+ +-----------------+
+| ATTRIBUTES: DEBUG, |  | ISVPROID   | | K_vendor (RSA)  |
+|   XFRM, MODE64BIT  |  | ISVSVN     | | VENDOR          |
++--------------------+  +------------+ +-----------------+
+
++--------------------------------------------------------+
+|            Enclave building tool chain                 |
++--------------------------------------------------------+
+                             |
+                             v
+      +------------------------------------------+
+      | SIGSTRUCT:                               |
+      +------------------------------------------+
+      |   MRMEASUREMENT                          |
+      |   MRSIGNER (SHA256( K_vendor module)))   |
+      |   ATTRIBUTES                             |
+      |   VENDOR                                 |
+      |   ISVPRODID                              |
+      |   ISVSVN                                 | 
+      |   DATE                                   |
+      |   MODULE   ---- K_vendor                 |
+      |   EXPONENT                               |
+      |   SIGNATURE                              |
+      |   Q1, Q2                                 |
+      +------------------------------------------+ 
+```
+
+Initialization and Attestation of the Enclave by the *Cloud Provider*
+
+```
+Software               SIGSTRUCT --------------+ 
+   |                       |                   |
+   v                       |                   v 
++------------------------+ |         +-------------------------+
+| ECREATE                | |         | Launch Enclave (LE)     |
++------------------------+ |         +-------------------------+
+| Computes SECS          | |         |  Creates/MAC EINITTOKEN |
+|   MRENCLAVE            | |         |    MRSIGNER,            |
+|   BASEADDR             | |         |    MRENCLAVE,           |
+|   SIZE                 | |         |    ISVPRODID,           |
+|   SSAFRAMESIZE         | |         |    ISVSVN,    # Key accessed only
+|   ATTRIBUTES           | | +-------|    MAC( Key ) # by SGX and ENCLAVE
++------------------------+ | |       +-------------------------+ 
+   |          +------------+ |                       
++--v----------|--------------|----+  +-------------+ 
+| ENCLAVE     |              |    |  | APPLICATION |
+| +-----------v--------------v--+ |  |             |
+| | EINIT SIGSTRUCT, EINITTOKEN | |  |             |
+| +-----------------------------+ |  |             |
+| | Checks:                     | |  |             |
+| |   EINITTOKEN.SIGNATURE      | |  |             |
+| |   SECS.MRENCLAVE =          | |  |             |
+| |     EINITTOKEN.MRENCLAVE    | |  |             |
+| |   SECS.ATTRIBUTES =         | |  |             |
+| |     EINITTOKEN.ATTRIBUTES   | |  |             |
+| +-----------------------------+ |  |             |
+| | Complete SECS               | |  |             |
+| |   MRENCLAVE                 | |  |             |
+| |   BASEADDR                  | |  |             |
+| |   SIZE                      | |  |             |
+| |   SSAFRAMESIZE              | |  |             |
+| |   ATTRIBUTES                | |  |             |
+| |   ISVPRODID                 | |  |             |
+| |   ISVSVN                    | |  |             |
+| |   MRSIGNER                  | |  |             |
+| +-----------------------------+ |  |             |
+|                                 |  |             |
+| +--------------------------+    |  | REPORTDATA  |
+| | EREPORT REPORTDATA       |<-------------       |
+| +--------------------------+    |  |             |
+| | SGX creates/MAC REPORT:  |    |  |             |
+| |   MRSIGNER,              |    |  |             |
+| |   MRENCLAVE,             |    |  |             |
+| |   ISVPRODID,             |    |  |             |
+| |   ISVSVN,                |    |  |             |
+| |   REPORTDATA=Challenge,  |    |  |             |
+| |   CPUSVN,                |    |  | REPORT      |
+| |   MAC( Key )*            |----|--|-->          | *Key only accessed
+| +--------------------------+    |  |             |  by SGX and QE
++---------------------------------+  |             |
++--------------------------+         | REPORT      |
+| Quoting Enclave (QE)     |<----------            |
++--------------------------+         |             |
+| K_attestation (EPID)     | (proviosioned and     |
++--------------------------+  certirfied by Intel) |   
+| Check MAC                |         |             |
+| Quote:                   |         |             |
+|   REPORT                 |         | QUOTE       |
+|   SIGNATURE              |---------------->      |
++--------------------------+         |             |       
+                                     +-------------+ 
+ 
+``` 
+## RA-TLS
+
+Thanks to the attestation response, one knows the appropriated software is running, but we need a bit more to be able to provision some secrets, i.e. we need to set an encrypted channel and use the attestation to authenticate the terminating end point as being  the expected software.
+
+
+```
++-----------------------+ +-------------+
+| ENCLAVE               | | Application |
+| Generates             | |             | 
+|   Public (K) /        | |             |
+|   Private Key (k)     | |             |
+| CERTIFICATE:          | |             |
+|   K                   | |             |          SIGSTRUCT
+|   Attribute:          | |             |              |
+|     REPORT            | |             |              v
+|       REPORTDATA=H(K) | |             |        +-------------+  +-------------+  
+|     Intel cert.chain  | |             |        | Verifier    |  | Intel       |
+|   Signature( k )      | |             |        |             |  |             |
+| TLS server            | |             |   ClientHello        |  | Attestation |
+|   <----------------------------------------------------      |  | Service     |
+|   ServerHello         | |             |        |             |  | (IAS)       |
+|   EncryptedExtensions,| |             |        |             |  |             |
+|   Certificate,        | |             |        |             |  |             |
+|   CertificateVerify   | |             |        |             |  |             |
+|   ServerFinished      | |             |        |             |  |             |
+|   ---------------------------------------------------->      |  |             |
+|                       | |             |        |     REPORT, SIG(EPID)        |    
+|                       | |             |        |     ----------------->       |
+|                       | |             |        |      Attestation Result      |
+|                       | |             |        |     <----------------        |
+|                       | |             |        | Validates   |  |             |
+|                       | |             |        | Result      |  |             |
+|                       | |             |        |   MRENCLAVE |  |             |
+|                       | |             |        |   ...       |  |             |
+|                       | |             |    ClientFinished    |  |             |
+|   <----------------------------------------------------      |  |             |
+|                       | |             |        |             |  |             |
++-----------------------+ +-------------+        +-------------+  +-------------+
+```
+
+Note that this only works because:
+1. we know the code is generating a fresh pair of keys, and REPORTS tells us this is the code running in the enclave. 
+2. the key involved is the correct key we are setting the TLS session as that key is bound to the REPORT
+  
+
+Thanks to RA-TLS we have been able to establish a **trustworthy TLS session with the TEE** and we can trustworthy 
+provision the Enclave with secrets.
+
+Note that in this scheme the ENCLAVE does not authenticate the Verifier, so if secrets are expected by the ENCLAVE, it might be reasonable to use a mutually authenticated TLS.
+
+## Secret provisioning
+
+Secret provisioning heavily relies on RA-TLS, but instead of being initiated by the Verifier, it is initiated by the ENCLAVE.
+The Verifier, implements a TLS server and after the authentication of the TLS client (using attestation), the TLS server provides the different secrets. 
+
+```
++-----------------------+ +-------------+
+| ENCLAVE               | | Application |
+| Generates             | |             | 
+|   Public (K) /        | |             |
+|   Private Key (k)     | |             |
+| CERTIFICATE:          | |             |
+|   K                   | |             |          SIGSTRUCT
+|   Attribute:          | |             |              |
+|     REPORT            | |             |              v
+|       REPORTDATA=H(K) | |             |        +-------------+  +-------------+  
+|     Intel cert.chain  | |             |        | Secret Prov |  | Intel       |
+|   Signature( k )      | |             |        |             |  | Attestation |
+| CA (TLS server)       | |             |        |             |  | Service     |
+|    ClientHello        | |             |        |             |  | (IAS)       |
+|   ---------------------------------------------------->      |  |             |
+|                                   ServerHello                |  |             |
+|                                   EncryptedExtensions,       |  |             |
+|                                   Certificate,               |  |             |
+|                                   CertificateRequest,        |  |             |
+|                                   CertificateVerify,         |  |             |
+|                                   ServerFinished             |  |             |
+|   <----------------------------------------------------      |  |             |
+| server Authentication | |             |        |             |  |             |
+| (CeritifcateVerify)   | |             |        |             |  |             |
+|                       | |             |        |             |  |             |
+| Certificate           | |             |        |             |  |             |
+| CertificateVerify     | |             |        |             |  |             |
+| clientFinished        | |             |        |             |  |             |
+|   ---------------------------------------------------->      |  |             |
+|                       | |             |        |     REPORT, SIG(EPID)        |    
+|                       | |             |        |     ----------------->       |
+|                       | |             |        |      Attestation Result      |
+|                       | |             |        |     <----------------        |
+|                       | |             |        | Validates   |  |             |
+|                       | |             |        | Result      |  |             |
+|                       | |             |        |   MRENCLAVE |  |             |
+|                       | |             |        |   ...       |  |             |
+|                       | |           Secrets Provisionning    |  |             |
+|   <----------------------------------------------------      |  |             |
+|                       | |             |        |             |  |             |
++-----------------------+ +-------------+        +-------------+  +-------------+
+
+```
+
+ 
 
 ## TLS 1.3 LURK-T Conclusion
  
