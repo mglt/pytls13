@@ -21,7 +21,7 @@ import sys
 ##sys.path.insert( 0, os.path.abspath( '../../src/pytls13/' ))
 sys.path.insert( 0, os.path.abspath( '/home/mglt/gitlab/pytls13/src/pytls13' ))
 sys.path.insert( 0, os.path.abspath( '/home/mglt/gitlab/pytls13/src' ))
-sys.path.insert( 0, os.path.abspath( '/home/mglt/gitlab/pylurk.git/src' ))
+#sys.path.insert( 0, os.path.abspath( '/home/mglt/gitlab/pylurk.git/src' ))
 
 
 ## autodoc and napoleon (Google Python style)
@@ -30,6 +30,25 @@ extensions = [ 'sphinx.ext.autodoc', 'sphinx.ext.napoleon' ]
 templates_path = ['_templates']
 exclude_patterns = []
 
+## we include the Napoleon settings. Current values 
+## are the default except for including the __init__ as we
+## used toi describe th efunction in the init as opposed to
+## the class or function itslef.
+# Napoleon settings
+napoleon_google_docstring = True
+napoleon_numpy_docstring = True
+napoleon_include_init_with_doc = True
+napoleon_include_private_with_doc = False
+napoleon_include_special_with_doc = True
+napoleon_use_admonition_for_examples = False
+napoleon_use_admonition_for_notes = False
+napoleon_use_admonition_for_references = False
+napoleon_use_ivar = False
+napoleon_use_param = True
+napoleon_use_rtype = True
+napoleon_preprocess_types = False
+napoleon_type_aliases = None
+napoleon_attr_annotations = True
 
 
 # -- Options for HTML output -------------------------------------------------

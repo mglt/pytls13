@@ -108,7 +108,7 @@ E_GRAMINE_DIR = '/home/mglt/gitlab/pytls13/example/cli'
 ## which is the one of the CS.
 CREDENTIAL_DIR = os.path.join( CS_GRAMINE_DIR, 'sig_key_dir' ) 
 
-CONNECTIVITY = [ 'lib_cs' ]#, 'tcp', 'persistent_tcp' ]
+CONNECTIVITY = [ 'lib_cs', 'tcp', 'persistent_tcp' ]
 ENVIRONMENT = [ 'no_gramine']#, 'gramine_direct', 'gramine_sgx' ]
 SIG_SCHEME = [ \
 #'rsa_pss_rsae_sha256',
@@ -124,8 +124,25 @@ EPH_METHOD = [ 'cs_generated', 'e_generated' ]
 ECDHE_GROUPS = [ 'x25519']#, 'x448', 'secp256r1', 'secp384r1', 'secp521r1' ]
 
 URL = [ 'https://127.0.0.1:8402', 'https://127.0.0.1:8403']
- 
-DO_NOT_SHOW_TLS_CLIENT_OUTPUT_WHEN_WEB_PAGE_DETECTED = False
+
+## The intent of the command is to reduce the output received.
+##
+## By setting it to True, the script checked in the log that 
+## two web pages have been received - one during the 
+## certificate based authentication and one during the 
+## session resumption. When the two pages are detected the
+## script considers the session successfully established.
+##
+## By setting to False, all client output is displayed.
+DO_NOT_SHOW_TLS_CLIENT_OUTPUT_WHEN_WEB_PAGE_DETECTED = True
+
+## The intent of the command is automate the tests and 
+## perform all test sin batch
+##
+## By setting it to False, the script wait for a confimation
+## after each test.
+##
+## By setting it to True, the scripts runn all tests.
 TLS_CLIENT_FORCE_YES = True
 
 
