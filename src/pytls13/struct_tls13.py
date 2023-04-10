@@ -2,9 +2,18 @@ from construct.core import *
 from construct.lib import *
 from construct.debug import *
 
+## trying to specify whic structure we are using
+## 'this' cannot be found as well as some protected member
+## so we leave it for future work
+# from construct import Enum, Struct, Bytes, Prefixed, \
+#                      BytesInteger, GreedyRange, Computed, \
+#                      Switch, Const, Error, Padding, GreedyBytes,\
+#                      Select 
 """ TLS 1.3 related structures """
 
-## We need to remove the lurk specific structures and makes sure pylurk only has the lurk specific structures while importing the currnet specifications.
+## We need to remove the lurk specific structures 
+## and makes sure pylurk only has the lurk specific 
+## structures while importing the currnet specifications.
 
 
 ## Extensions
@@ -20,11 +29,11 @@ from construct.debug import *
 #          };
 #)
 
-## 
+##
 
 
-## signature_algorithm 
-SignatureScheme = Enum( Bytes(2), 
+## signature_algorithm
+SignatureScheme = Enum( Bytes(2),
   rsa_pkcs1_sha256 = b'\x04\x01',
   rsa_pkcs1_sha384 = b'\x05\x01',
   rsa_pkcs1_sha512 = b'\x06\x01',
@@ -41,9 +50,9 @@ SignatureScheme = Enum( Bytes(2),
   rsa_pss_pss_sha512 = b'\x08\x0b',
   rsa_pkcs1_sha1 = b'\x02\x01',
   ecdsa_sha1 = b'\x02\x03',
-  ## The format is the one defined for TLS 1.2 
-  backward_compatibility_sha224_rsa = b'\x03\x01', 
-  backward_compatibility_sha224_ecdsa = b'\x03\x03', 
+  ## The format is the one defined for TLS 1.2
+  backward_compatibility_sha224_rsa = b'\x03\x01',
+  backward_compatibility_sha224_ecdsa = b'\x03\x03',
 
 )
 
@@ -54,7 +63,7 @@ SignatureSchemeList = Struct(
 
 ## psk_key_exchange_modes
 
-PskKeyExchangeMode = Enum(BytesInteger(1), 
+PskKeyExchangeMode = Enum(BytesInteger(1),
   psk_ke = 0,
   psk_dhe_ke = 1,
 )
@@ -67,23 +76,23 @@ PskKeyExchangeModes = Struct(
 
 PostHandshakeAuth = Struct()
 
-## supported_group 
+## supported_group
 
 NamedGroup = Enum( Bytes(2),
 ##  unallocated_RESERVED(0x0000),
 ##  /* Elliptic Curve Groups (ECDHE) */
 ##  obsolete_RESERVED(0x0001..0x0016),
-  secp256r1 = b'\x00\x17', 
-  secp384r1 = b'\x00\x18', 
+  secp256r1 = b'\x00\x17',
+  secp384r1 = b'\x00\x18',
   secp521r1 = b'\x00\x19',
 ##  obsolete_RESERVED(0x001A..0x001C',
-  x25519 = b'\x00\x1D', 
+  x25519 = b'\x00\x1D',
   x448 = b'\x00\x1E',
 ##  /* Finite Field Groups (DHE) */
-  ffdhe2048 = b'\x01\x00', 
-  ffdhe3072 = b'\x01\x01', 
+  ffdhe2048 = b'\x01\x00',
+  ffdhe3072 = b'\x01\x01',
   ffdhe4096 = b'\x01\x02',
-  ffdhe6144 = b'\x01\x03', 
+  ffdhe6144 = b'\x01\x03',
   ffdhe8192 = b'\x01\x04',
 ##  /* Reserved Code Points */
 ##  ffdhe_private_use(0x01FC..0x01FF),
@@ -100,23 +109,23 @@ NamedGroupList = Struct(
 
 KeyShareEntry = Struct(
  '_name' / Computed('KeyShareEntry'),
-  'group' / NamedGroup, 
+  'group' / NamedGroup,
   'key_exchange' / Prefixed(BytesInteger(2), Switch(this.group,
   { 'secp256r1' : Struct(
-      'legacy_form' / Const(4, BytesInteger(1)), 
+      'legacy_form' / Const(4, BytesInteger(1)),
       'x' / BytesInteger(32),
       'y' / BytesInteger(32)
-      ), 
+      ),
     'secp384r1' : Struct(
-      'legacy_form' / Const(4, BytesInteger(1)), 
+      'legacy_form' / Const(4, BytesInteger(1)),
       'x' / BytesInteger(48),
       'y' / BytesInteger(48)
-      ), 
+      ),
     'secp521r1' : Struct(
-      'legacy_form' / Const(4, BytesInteger(1)), 
+      'legacy_form' / Const(4, BytesInteger(1)),
       'x' / BytesInteger(66),
       'y' / BytesInteger(66)
-      ), 
+      ),
     'x25519' : Bytes(32),
     'x448' : Bytes(56),
   }, default=Error))
@@ -131,17 +140,17 @@ KeyShareEntry = Struct(
 
 KeyShareClientHello = Struct(
  '_name' / Computed('KeyShareClientHello'),
- 'client_shares' / Prefixed(BytesInteger(2), GreedyRange(KeyShareEntry)) 
+ 'client_shares' / Prefixed(BytesInteger(2), GreedyRange(KeyShareEntry))
 )
 
 ## only for LURK
 ##PartialKeyShareClientHello = Struct(
 ## '_name' / Computed('KeyShareClientHelloEmpty'),
-## 'client_shares' / Prefixed(BytesInteger(2), GreedyRange( Select( KeyShareEntry, EmptyKeyShareEntry ) ) ) 
+## 'client_shares' / Prefixed(BytesInteger(2), GreedyRange( Select( KeyShareEntry, EmptyKeyShareEntry ) ) )
 ##)
 
 ## only for LURK
-#KeyShareClient = Select( 
+#KeyShareClient = Select(
 #  KeyShareClientHello, KeyShareClientHelloEmpty
 #)
 
@@ -188,7 +197,7 @@ PskBinderEntry = Struct(
 )
 
 OfferedPsks = Struct(
-  'identities' / Prefixed(BytesInteger(2), GreedyRange(PskIdentity)), 
+  'identities' / Prefixed(BytesInteger(2), GreedyRange(PskIdentity)),
   'binders' / Prefixed(BytesInteger(2), GreedyRange(PskBinderEntry))
 )
 
@@ -196,15 +205,15 @@ OfferedPsks = Struct(
 ## Only for LURK
 
 #ExtendedPskIdentity = Struct(
-#  '_name' / Computed(''), 
+#  '_name' / Computed(''),
 #  'identity' / Prefixed( BytesInteger(2), GreedyBytes ),
 #  'obfuscated_ticket_age' / Bytes(4)
-#  'tls_hahs' / TLSHash, 
+#  'tls_hahs' / TLSHash,
 #  'psk_bytes' / Prefixed( BytesInteger(2), GreedyBytes ),
 #)
 
 ##OfferedPsksWithNoBinders = Struct(
-##  'identities' / Prefixed(BytesInteger(2), GreedyRange(PskIdentity)) 
+##  'identities' / Prefixed(BytesInteger(2), GreedyRange(PskIdentity))
 ##)
 
 
@@ -212,8 +221,8 @@ OfferedPsks = Struct(
 ## server_certificate
 
 ## https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml#tls-extensiontype-values-3
-##CertificateType = Enum( BytesInteger(1), 
-##  X509 = 0, 
+##CertificateType = Enum( BytesInteger(1),
+##  X509 = 0,
 ##  RawPublicKey = 2
 ##)
 
@@ -240,24 +249,24 @@ OfferedPsks = Struct(
 
 ProtocolVersion = Bytes( 2 )
 
-ClientSupportedVersions = Struct( 
+ClientSupportedVersions = Struct(
   'versions' / Prefixed( BytesInteger(1), GreedyRange( ProtocolVersion ))
 )
 
-ServerSupportedVersions = Struct( 
+ServerSupportedVersions = Struct(
   'selected_version' / ProtocolVersion
 )
 
 # server name indication
 
-NameType = Enum( BytesInteger(1), 
+NameType = Enum( BytesInteger(1),
   hostname = 0,
 )
 
-ServerName = Struct( 
-  'name_type' / NameType, 
-  'name' / Switch( this.name_type,  
-    { 'hostname' : Prefixed( BytesInteger(2), GreedyBytes )  } ) 
+ServerName = Struct(
+  'name_type' / NameType,
+  'name' / Switch( this.name_type,
+    { 'hostname' : Prefixed( BytesInteger(2), GreedyBytes )  } )
 )
 
 ServerNameList = Struct(
@@ -266,11 +275,11 @@ ServerNameList = Struct(
 
 # ec_point_format
 
-ECPointFormat = Enum( BytesInteger( 1 ), 
-  uncompressed = 0, 
+ECPointFormat = Enum( BytesInteger( 1 ),
+  uncompressed = 0,
 )
 
-ECPointFormatList = Struct( 
+ECPointFormatList = Struct(
   'ec_point_format_list' / Prefixed( BytesInteger( 1 ), GreedyRange( ECPointFormat  ) )
 )
 
@@ -279,7 +288,7 @@ ECPointFormatList = Struct(
 DistinguishedName = Prefixed( BytesInteger(2), GreedyBytes )
 
 CertificateAuthoritiesExtension = Struct(
-  'authorities' / Prefixed( BytesInteger(2), GreedyRange( DistinguishedName ) ) 
+  'authorities' / Prefixed( BytesInteger(2), GreedyRange( DistinguishedName ) )
 )
 
 
@@ -289,51 +298,51 @@ OIDFilter = Struct(
   'certificate_extension_values' / Prefixed( BytesInteger(2), GreedyBytes )
 )
 
-OIDFilterExtension = Struct( 
+OIDFilterExtension = Struct(
   'filters' / Prefixed( BytesInteger(2), GreedyRange( OIDFilter ) )
 )
 
 # cookie
 
-Cookie = Struct( 
+Cookie = Struct(
   'cookie' / Prefixed( BytesInteger(2), GreedyBytes )
 )
 
 ## Extension structure
 
-ExtensionType = Enum( BytesInteger(2), 
-  server_name = 0,                              
-  max_fragment_length = 1,                      
-  status_request = 5,                           
+ExtensionType = Enum( BytesInteger(2),
+  server_name = 0,
+  max_fragment_length = 1,
+  status_request = 5,
   supported_groups = 10,
   ec_point_format = 11,
-  signature_algorithms = 13,                    
-  use_srtp = 14,                                
-  heartbeat = 15,                               
-  application_layer_protocol_negotiation = 16,  
-  signed_certificate_timestamp = 18,            
-  client_certificate_type = 19,                 
-  server_certificate_type = 20,                 
+  signature_algorithms = 13,
+  use_srtp = 14,
+  heartbeat = 15,
+  application_layer_protocol_negotiation = 16,
+  signed_certificate_timestamp = 18,
+  client_certificate_type = 19,
+  server_certificate_type = 20,
   padding = 21,
   encrypt_then_mac = 22,
   extended_master_secret = 23,
   session_ticket = 35,
-  pre_shared_key = 41,                          
-  early_data = 42,                              
-  supported_versions = 43,                      
-  cookie = 44,                                  
-  psk_key_exchange_modes = 45,                  
-  certificate_authorities = 47,                 
-  oid_filters = 48,                             
-  post_handshake_auth = 49,                     
-  signature_algorithms_cert = 50,               
-  key_share = 51,                               
+  pre_shared_key = 41,
+  early_data = 42,
+  supported_versions = 43,
+  cookie = 44,
+  psk_key_exchange_modes = 45,
+  certificate_authorities = 47,
+  oid_filters = 48,
+  post_handshake_auth = 49,
+  signature_algorithms_cert = 50,
+  key_share = 51,
 )
 
 ## To do list all possible extensions with a Switch
 ## The default is set to Bytes, This is expected to be usefull for
 ## parsing but cannot be used for building when a structure is provided.
-## Instead the rwa data may be provided - to be tested. 
+## Instead the rwa data may be provided - to be tested.
 
 Extension = Struct(
   '_name' / Computed('Extension'),
@@ -344,37 +353,37 @@ Extension = Struct(
       'server_name' : ServerNameList,
       'supported_groups' : NamedGroupList,
       'ec_point_format' : ECPointFormatList,
-      'signature_algorithms' : SignatureSchemeList, 
+      'signature_algorithms' : SignatureSchemeList,
       'encrypt_then_mac' : Const( b'' ),
       'extended_master_secret' : Const( b'' ),
       'session_ticket' : GreedyBytes,
       'pre_shared_key' : Switch(this._._msg_type,
          {
-           'client_hello' : OfferedPsks, 
-           'server_hello' : BytesInteger( 2 ) 
+           'client_hello' : OfferedPsks,
+           'server_hello' : BytesInteger( 2 )
          }
         ),
       'supported_versions' : Switch(this._._msg_type,
          {
-           'client_hello' : ClientSupportedVersions, 
-           'server_hello' : ServerSupportedVersions 
+           'client_hello' : ClientSupportedVersions,
+           'server_hello' : ServerSupportedVersions
          }
         ),
       'cookie' : Cookie,
-      'psk_key_exchange_modes' : PskKeyExchangeModes, 
+      'psk_key_exchange_modes' : PskKeyExchangeModes,
       'certificate_authorities' : DistinguishedName,
       'oid_filters' : OIDFilterExtension,
       'post_handshake_auth' : PostHandshakeAuth,
-      'signature_algorithms_cert' : SignatureSchemeList, 
-      'key_share': Switch(this._._msg_type, 
+      'signature_algorithms_cert' : SignatureSchemeList,
+      'key_share': Switch(this._._msg_type,
          {
-          'client_hello' : KeyShareClientHello, 
-          'server_hello' : KeyShareServer, 
+          'client_hello' : KeyShareClientHello,
+          'server_hello' : KeyShareServer,
          }
         )
     } )
 ##    } )
-  ) 
+  )
 )
 
 ##LURK only -- we may do the same with ServerHello
@@ -387,27 +396,27 @@ Extension = Struct(
 ##                      Switch(this.extension_type,
 ##    {
 ##      'supported_groups' : NamedGroupList,
-##      'signature_algorithms' : SignatureSchemeList, 
+##      'signature_algorithms' : SignatureSchemeList,
 ##      'pre_shared_key' : Switch(this._._msg_type,
 ##         {
-##           'client_hello' : OfferedPsksWithNoBinders, 
-##           'server_hello' : BytesInteger( 2 ) 
+##           'client_hello' : OfferedPsksWithNoBinders,
+##           'server_hello' : BytesInteger( 2 )
 ##         }
 ##        ),
 ##      'post_handshake_auth' : PostHandshakeAuth,
-##      'psk_key_exchange_modes' : PskKeyExchangeModes, 
-##      'key_share': Switch(this._._msg_type, 
+##      'psk_key_exchange_modes' : PskKeyExchangeModes,
+##      'key_share': Switch(this._._msg_type,
 ##         {
 ##          'client_hello' : Select( PartialKeyShareClientHello, KeyShareClientHello ),
-##          'server_hello' : KeyShareServer, 
+##          'server_hello' : KeyShareServer,
 ##         }
 ##        )
 ##    }, default=Bytes)
-##  ) 
+##  )
 ##)
 
 ############################
-## TLS handshake messages ##  
+## TLS handshake messages ##
 ############################
 
 ## ClientHello
@@ -417,11 +426,11 @@ CipherSuite = Enum( Bytes(2),
    TLS_AES_256_GCM_SHA384 = b'\x13\x02',
    TLS_CHACHA20_POLY1305_SHA256 = b'\x13\x03',
    TLS_AES_128_CCM_SHA256 = b'\x13\x04',
-   TLS_AES_128_CCM_8_SHA256 = b'\x13\x05', 
+   TLS_AES_128_CCM_8_SHA256 = b'\x13\x05',
    TLS_EMPTY_RENEGOTIATION_INFO_SCV = b'\x00\xff'
 )
 
-ClientHello = Struct( 
+ClientHello = Struct(
   '_name' / Computed('ClientHello'),
   '_msg_type' / Computed('client_hello'),
   'legacy_version' / Const(b'\x03\x03'),
@@ -434,11 +443,11 @@ ClientHello = Struct(
 
 
 ## LURK only
-##PartialClientHello = Struct( 
+##PartialClientHello = Struct(
 ##  '_name' / Computed('ClientHello'),
 ##  '_msg_type' / Computed('client_hello'),
 ##  'legacy_version' / Const(b'\x03\x03'),
-##  'random' / Bytes(32), 
+##  'random' / Bytes(32),
 ##  'legacy_session_id' / Prefixed(BytesInteger(1), GreedyBytes ),
 ##  'cipher_suites' / Prefixed(BytesInteger(2), GreedyRange(CipherSuite)),
 ##  'legacy_compression_methods' / Prefixed(BytesInteger(1), GreedyBytes),
@@ -453,7 +462,7 @@ ServerHello = Struct(
   '_msg_type' / Computed('server_hello'),
   'legacy_version' / Const(b'\x03\x03'),
   'random' / Bytes(32),
-  'legacy_session_id_echo' / Prefixed(BytesInteger(1), GreedyBytes), 
+  'legacy_session_id_echo' / Prefixed(BytesInteger(1), GreedyBytes),
   'cipher_suite' / CipherSuite,
   'legacy_compression_method' / Const(b'\x00'),
   'extensions' / Prefixed(BytesInteger(2), GreedyRange(Extension))
@@ -464,9 +473,9 @@ ServerHello = Struct(
 NewSessionTicket = Struct(
   '_name' / Computed('NewTicketSession'),
   '_msg_type' / Computed('new_ticket_session'),
-  'ticket_lifetime' / BytesInteger(4), 
-  'ticket_age_add' / BytesInteger(4), 
-  'ticket_nonce' / Prefixed(BytesInteger(1), GreedyBytes), 
+  'ticket_lifetime' / BytesInteger(4),
+  'ticket_age_add' / BytesInteger(4),
+  'ticket_nonce' / Prefixed(BytesInteger(1), GreedyBytes),
   'ticket' / Prefixed(BytesInteger(2), GreedyBytes),
   'extensions' / Prefixed(BytesInteger(2), GreedyRange(Extension))
 )
@@ -482,14 +491,14 @@ EncryptedExtensions = Struct(
 )
 
 
-## Certificate 
+## Certificate
 CertificateType = Enum( BytesInteger(1),
   X509 = 0,
   RawPublicKey = 2
 )
 
 CertificateEntry = Struct(
-   
+
 #   '_certificate_type' / Computed(this._._certificate_type),
 #   'cert' / Switch( this._certificate_type, {
 #    'RawPublicKey': Prefixed( BytesInteger(3), GreedyBytes),
@@ -514,9 +523,9 @@ CertificateCompressionAlgorithm = Enum ( BytesInteger(2),
   zstd = 3
 )
 
-CompressedCertificate = Struct( 
+CompressedCertificate = Struct(
   '_name' / Computed('CompressedCertificate'),
-  'algorithm' / CertificateCompressionAlgorithm, 
+  'algorithm' / CertificateCompressionAlgorithm,
   'uncompressed_length' / BytesInteger(3),
   'compressed_certificate_message' / Prefixed(BytesInteger(3), GreedyBytes)
 )
@@ -530,13 +539,13 @@ CertificateRequestExtension = Struct(
   'extension_data' /  Prefixed(BytesInteger(2),
                       Switch(this.extension_type,
     {
-#     'status_request' : 
-      'signature_algorithms' : SignatureSchemeList, 
+#     'status_request' :
+      'signature_algorithms' : SignatureSchemeList,
 #     'signed_certificate_timestamp' :
       'certificate_authorities' : DistinguishedName,
       'oid_filters' : OIDFilterExtension,
-      'signature_algorithms_cert' : SignatureSchemeList, 
- 
+      'signature_algorithms_cert' : SignatureSchemeList,
+
     } ) )
 )
 CertificateRequest = Struct(
@@ -558,7 +567,7 @@ CertificateVerify = Struct(
 Finished = Struct(
   '_name' / Computed('Finished'),
 ##  '_cipher' / Computed(this._._cipher),
-##  '_verify_data_length' / Switch(this._cipher,  
+##  '_verify_data_length' / Switch(this._cipher,
 ##    { 'TLS_AES_128_GCM_SHA256' : Const(32, Int8ul),
 ##      'TLS_AES_256_GCM_SHA384' : Const(48, Int8ul),
 ##      'TLS_CHACHA20_POLY1305_SHA256' : Const(32, Int8ul),
@@ -566,13 +575,13 @@ Finished = Struct(
 ##      'TLS_AES_128_CCM_8_SHA256' : Const(32, Int8ul)
 ##    }, default=Rebuild( Byte, len_( this.verify_data ) ) ),
   'verify_data' / Select( Bytes( 48 ), Bytes( 32 ) ) ## must be in decreasing order
-#  'verify_data' / Bytes( this._verify_data_length )  
+#  'verify_data' / Bytes( this._verify_data_length )
 )
 
 ##Finished = Struct(
 ##  '_name' / Computed('Finished'),
 ##  '_cipher' / Computed(this._._cipher),
-##  'verify_data' / Switch(this._cipher,  
+##  'verify_data' / Switch(this._cipher,
 ##    { 'TLS_AES_128_GCM_SHA256' : Bytes(32),
 ##      'TLS_AES_256_GCM_SHA384' : Bytes(48),
 ##      'TLS_CHACHA20_POLY1305_SHA256' : Bytes(32),
@@ -583,8 +592,8 @@ Finished = Struct(
 ##)
 
 ## KeyUpdate
-KeyUpdateRequest = Enum( BytesInteger(1), 
-  update_not_requested = 0, 
+KeyUpdateRequest = Enum( BytesInteger(1),
+  update_not_requested = 0,
   update_requested = 1
 )
 
@@ -593,8 +602,8 @@ KeyUpdate = Struct(
   'request_update' / KeyUpdateRequest
 )
 
-## Hanshake Message 
-HandshakeType = Enum( BytesInteger(1), 
+## Hanshake Message
+HandshakeType = Enum( BytesInteger(1),
   client_hello = 1,
   server_hello = 2,
   new_session_ticket = 4,
@@ -608,15 +617,15 @@ HandshakeType = Enum( BytesInteger(1),
   message_hash = 254,
 )
 
-## certificate_type and cipher can be passed as arguments to the 
-## Handshake structure. These arguments are then passed down to the 
-## downstreamed containers until the final structure. 
+## certificate_type and cipher can be passed as arguments to the
+## Handshake structure. These arguments are then passed down to the
+## downstreamed containers until the final structure.
 Handshake = Struct(
   '_name' / Computed('Handshake'),
   'msg_type' / HandshakeType,
-#  '_certificate_type' / If( this.msg_type == 'certificate', Computed(this._._certificate_type)),   
-##  '_certificate_type' / If( this.msg_type == 'certificate', Computed('X509') ),   
-##  '_cipher' / If( this.msg_type == 'finished', Computed(this._._cipher)),   
+#  '_certificate_type' / If( this.msg_type == 'certificate', Computed(this._._certificate_type)),
+##  '_certificate_type' / If( this.msg_type == 'certificate', Computed('X509') ),
+##  '_cipher' / If( this.msg_type == 'finished', Computed(this._._cipher)),
   'data' / Prefixed( BytesInteger(3), Switch(this.msg_type,
     { 'client_hello' : ClientHello,
       'server_hello' : ServerHello,
@@ -627,31 +636,31 @@ Handshake = Struct(
       'certificate_verify' : CertificateVerify,
       'finished' : Finished,
       'new_session_ticket' : NewSessionTicket,
-      'key_update' : KeyUpdate 
+      'key_update' : KeyUpdate
     })
   )
 )
 
-##HandshakeStream = Struct( 
+##HandshakeStream = Struct(
 ##  GreedyRange( Handshake )
 ##)
 
 ## Designation of specific handshake messages
-## These structures have been designed to designate Sequences. 
-## As Sequences are nesting structures and initializing the 
+## These structures have been designed to designate Sequences.
+## As Sequences are nesting structures and initializing the
 ## context in the Sequence has not been performed, the parameters
-## associated to the context are read one level above. 
-## Unless there is such need, it is recommended to use the Handshake 
+## associated to the context are read one level above.
+## Unless there is such need, it is recommended to use the Handshake
 ## and other associated message specific structures
 
-HSClientHello = Struct( 
+HSClientHello = Struct(
   '_name' / Computed('HSClientHello'),
   'msg_type' / Const('client_hello', HandshakeType),
   'data' / ClientHello
 )
 
 ## only for LURK
-##HSPartialClientHello = Struct( 
+##HSPartialClientHello = Struct(
 ##  '_name' / Computed('HSPartialClientHello'),
 ##  'msg_type' / Const('client_hello', HandshakeType),
 ##  'data' / PartialClientHello
@@ -663,38 +672,38 @@ HSServerHello = Struct(
   'data' / ServerHello
 )
 
-HSEncryptedExtensions = Struct( 
+HSEncryptedExtensions = Struct(
   '_name' / Computed('HSEncryptedExtensions'),
-  'msg_type' / Const('encrypted_extensions', HandshakeType), 
-  'data' / EncryptedExtensions 
+  'msg_type' / Const('encrypted_extensions', HandshakeType),
+  'data' / EncryptedExtensions
 )
 
 HSCertificateRequest = Struct(
   '_name' / Computed('HSCertificateRequest'),
-  'msg_type' / Const('certificate_request', HandshakeType), 
+  'msg_type' / Const('certificate_request', HandshakeType),
   'data' / CertificateRequest
 )
 
-HSCertificate = Struct( 
+HSCertificate = Struct(
 #  '_certificate_type' / Computed(this._._._certificate_type),
   '_name' / Computed('HSCertificate'),
-  'msg_type' / Const('certificate', HandshakeType), 
+  'msg_type' / Const('certificate', HandshakeType),
   'data' / Certificate
 )
 
 HSCertificateVerify = Struct(
   '_name' / Computed('HSCertificateVerify'),
-  'msg_type' / Const('certificate_verify', HandshakeType), 
+  'msg_type' / Const('certificate_verify', HandshakeType),
   'data' / CertificateVerify
 )
 
 HSFinished = Struct(
   '_name' / Computed('HSFinished'),
-  'msg_type' / Const('finished', HandshakeType), 
-  'data' / Finished 
+  'msg_type' / Const('finished', HandshakeType),
+  'data' / Finished
 )
 
-HSEndOfEarlyData = Struct( 
+HSEndOfEarlyData = Struct(
   '_name' / Computed('HSEndOfEarlyData'),
   'msg_type' / Const('end_of_early_data', HandshakeType),
   'data' / EndOfEarlyData
@@ -703,7 +712,7 @@ HSEndOfEarlyData = Struct(
 ### Alert message
 
 AlertLevel = Enum( BytesInteger(1),
-  warning = 1, 
+  warning = 1,
   fatal = 2
 )
 
@@ -744,8 +753,8 @@ AlertDescription = Enum( BytesInteger(1),
   no_application_protocol = 120
 )
 
-Alert = Struct( 
-  'level' / AlertLevel, 
+Alert = Struct(
+  'level' / AlertLevel,
   'description' / AlertDescription
 )
 
@@ -761,53 +770,53 @@ ChangeCipherSpec = Struct(
 )
 
 #### Encrypted messages
-ContentType = Enum( BytesInteger(1), 
-  change_cipher_spec = 20, 
+ContentType = Enum( BytesInteger(1),
+  change_cipher_spec = 20,
   alert = 21,
-  handshake = 22, 
+  handshake = 22,
   application_data = 23
 )
 
 ## plaintext with single message
 TLSPlaintext = Struct(
-  'type' / ContentType, 
+  'type' / ContentType,
   'legacy_record_version' /  Const( b'\x03\x03' ),
-  'fragment' / Prefixed( BytesInteger(2), Switch( this.type, 
-     { 'change_cipher_spec' : ChangeCipherSpec, 
-       'alert' : Alert, 
-       'handshake' : Handshake, 
+  'fragment' / Prefixed( BytesInteger(2), Switch( this.type,
+     { 'change_cipher_spec' : ChangeCipherSpec,
+       'alert' : Alert,
+       'handshake' : Handshake,
        'application_data' : GreedyBytes } ) )
 )
 
 ## new structure
 ## FragmentTLSPlaintext is expected to become TLSPlaintext
 FragmentTLSPlaintext = Struct(
-  'type' / ContentType, 
+  'type' / ContentType,
   'legacy_record_version' /  Const( b'\x03\x03' ),
-  'fragment' / Prefixed( BytesInteger(2), Switch( this.type, 
-     { 'change_cipher_spec' : ChangeCipherSpec, 
-       'alert' : Alert, 
-       'handshake' : GreedyBytes, ## as it may be fragmented 
+  'fragment' / Prefixed( BytesInteger(2), Switch( this.type,
+     { 'change_cipher_spec' : ChangeCipherSpec,
+       'alert' : Alert,
+       'handshake' : GreedyBytes, ## as it may be fragmented
        'application_data' : GreedyBytes } ) )
 )
 
 
 
-#TLSPlaintextRange = Struct( 
+#TLSPlaintextRange = Struct(
 #  GreedyRange( TLSPlaintext )
 #)
 
 #TLSCiphertext = Struct(
-#  'opaque_type' / Const( ContentType.build( 'application_data' )), 
+#  'opaque_type' / Const( ContentType.build( 'application_data' )),
 #  'legacy_record_version' / Const( b'\x03\x03' ),
-#  'length' / BytesInteger(2), 
+#  'length' / BytesInteger(2),
 #  'encrypted_reccord' / Prefixed( BytesInteger(2), Bytes( this.length ) )
 #)
 
 
 TLSInnerPlaintext = Struct(
 #  'content' / GreedyBytes,
-  
+
   'content' / Switch( this._.type,
      { 'change_cipher_spec' : ChangeCipherSpec,
        'alert' : Alert,
@@ -815,20 +824,20 @@ TLSInnerPlaintext = Struct(
        'application_data' : Bytes( this._.clear_text_msg_len ) } ),
 #       'application_data' : Bytes( 4 ) } ),
 #       'application_data' : GreedyBytes } ),
-  'type' / ContentType, 
-#  'zeros' / Array( this._.length_of_padding, Const(b'\x00') ) 
-  'zeros' / Padding( this._.length_of_padding, b'\x00' ) 
+  'type' / ContentType,
+#  'zeros' / Array( this._.length_of_padding, Const(b'\x00') )
+  'zeros' / Padding( this._.length_of_padding, b'\x00' )
 )
 
 FragmentTLSInnerPlaintext = Struct(
 #  'content' / GreedyBytes,
-  
+
   'content' /  Switch( this._.type,
      { 'change_cipher_spec' : ChangeCipherSpec,
        'alert' : Alert,
        'handshake' : Bytes( this._.clear_text_msg_len ),
        'application_data' : Bytes( this._.clear_text_msg_len ) } ),
-  'type' / ContentType, 
-  'zeros' / Padding( this._.length_of_padding, b'\x00' ) 
+  'type' / ContentType,
+  'zeros' / Padding( this._.length_of_padding, b'\x00' )
 )
 
