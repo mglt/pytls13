@@ -17,4 +17,3 @@ class ServerTLSAlert( TLSAlert ):
 
 class ClientTLSAlert( TLSAlert ):
   pass
-
