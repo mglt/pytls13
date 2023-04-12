@@ -1,3 +1,5 @@
+# Welcome to pytls13 !
+
 `pytls13` implements a TLS 1.3 client and relies on `pylurk` for all cryptographic operations related to the client authentication. 
  
 `pytl13` can be used as follows:
@@ -23,7 +25,7 @@ LURK is a generic protocol whose purpose is to support specific interactions wit
 TLS being split into a CS and an Engine
 ```
 
-[Examples of TLS 1.3 client ]() and [Using `pytls13` and `pylurk`]() provides more details example on how to combine the TLS engine (E) and the Crypto Service (CS) with [LURK-T TLS 1.3 client]() providing a complete example where the CS runs into a Trusted Execution Enclave (TEE) - SGX in our case. 
+[pytls13 documentation](https://pytls13.readthedocs.io/en/latest/) provides **Examples of TLS 1.3 client** and  **Using `pytls13` and `pylurk`** sections with detailed examples on how to combine the TLS engine (E) and the Crypto Service (CS) with.  The **LURK-T TLS 1.3 client** section providing a complete example where the CS runs into a Trusted Execution Enclave (TEE) - SGX in our case. 
 
 ## Installation
 

@@ -35,7 +35,7 @@ sys.path.insert( 0, os.path.abspath( '../../src/pytls13' ))
 
 
 ## autodoc and napoleon (Google Python style)
-extensions = [ 'sphinx.ext.autodoc', 'sphinx.ext.napoleon' ]
+extensions = [ 'sphinx.ext.autodoc', 'sphinx.ext.napoleon', "myst_parser" ]
 
 templates_path = ['_templates']
 exclude_patterns = []
