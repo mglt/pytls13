@@ -33,8 +33,10 @@ PSK is solely used in conjunction of session resumption.
 
 
 class ClientTLS13Session:
+  """defines a TLS 1.3 Session initiated by the TLS client """
 
   def __init__( self, clt_conf, engine_ticket_db=None, cs=None ) :
+
     self.clt_conf = clt_conf
     self.engine_ticket_db = engine_ticket_db
     print( "::Instantiating the Lurk client" )
@@ -434,26 +436,26 @@ class ClientTLS13Session:
 
 class SimpleTLS13Client:
 
-  def __init__( self, conf:dict ):
+  """ defines the most simple TLS13 Client
 
-    """ defines the most simple TLS13 Client
+  The TLS client takes a configuration dictionary as an argument.
 
-    The TLS client takes a configuration dictionary as an argument.
+  The complete configuration file MAY be provided.
+  However, it is expected this configuration dictionary MAY be
+  provided in a reduced form that only carry relevant information
+  leaving other fields to be completed automatically.
+  The pytls13.tls_client_conf.Configuration( ) object is expected
+  to perfom such action.
 
-    The complete configuration file MAY be provided.
-    However, it is expected this configuration dictionary MAY be
-    provided in a reduced form that only carry relevant information
-    leaving other fields to be completed automatically.
-    The pytls13.tls_client_conf.Configuration( ) object is expected
-    to perfom such action.
+  A typical configuration can be the following one.
+  Note that these templates are only examples.
+  Not all fields are mandatory.
 
-    A typical configuration can be the following one.
-    Note that these templates are only examples.
-    Not all fields are mandatory.
+  Template with local CS (lib_cs). In this case public
+  and private keys needs to be provided.
 
+  .. code-block:: python
 
-    Template with local CS (lib_cs). In this case public
-    and private keys needs to be provided.
     {
       'destination': {
          'ip': '127.0.0.1',
@@ -466,8 +468,7 @@ class SimpleTLS13Client:
          'session_resumption': False,
          'ephemeral_method': 'e_generated'
        },
-       'description': '  - OpenSSL TLS1.3 Server\n'
-                      '  - authenticated client\n',
+       'description': "- OpenSSL TLS1.3 Server - authenticated client",
        'lurk_client': {
          'connectivity': {
            'type': 'lib_cs'
@@ -482,8 +483,12 @@ class SimpleTLS13Client:
        }
     }
 
-    Template with remote CS. In this case public
-    and private keys needs to be provided.
+
+  Template with remote CS. In this case public
+  and private keys needs to be provided.
+
+  .. code-block:: python
+
     {
       'destination': {
         'ip': '127.0.0.1',
@@ -496,8 +501,7 @@ class SimpleTLS13Client:
         'session_resumption': False,
         'ephemeral_method': 'e_generated'
       },
-      'description': '  - OpenSSL TLS1.3 Server\n'
-                     '  - authenticated client\n',
+      'description': "- OpenSSL TLS1.3 Server - authenticated client",
       'lurk_client': {'connectivity': {'type': 'tcp',
                                      'ip': '127.0.0.1',
                                      'port': 9401}},
@@ -508,7 +512,12 @@ class SimpleTLS13Client:
         }
       }
     }
-    """
+
+
+  """
+    
+  def __init__( self, conf:dict ):
+
     self.conf = conf
     clt_conf = pytls13.tls_client_conf.Configuration( )
     clt_conf.merge( conf )

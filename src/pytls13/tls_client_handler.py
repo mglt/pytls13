@@ -200,7 +200,28 @@ typing.NewType( 'TLSMsg', TLSMsg )
 
 
 class TLSByteStreamParser:
+  """Parse received bytes and convert them into TLS messages
 
+  collect received bytes, reassemble plaintext fragments
+
+  Attributes:
+    socket: the socket the parser is listening to
+    cipher: the cipher to decrypt the incoming TLS fragments.
+      By default the cipher is set to None for example to handle
+      non encrypted ServerHello.
+    byte_stream: the received bytes. Anytime there is a read on
+      the socket the raw bytes are aggregated into this variable. 
+      By default, it is set to th empty byte stream b''. 
+    fragment: the bytes associated to fragments that have been
+      received. These fragments are considered as intermediary
+      steps to output a message. Sufficnet bytes my be receievd
+      to get a fragment but not enough to get a TLS message. 
+      When sufficient fragments are received, the TLS message
+      is output and the fragment bytes emptied.
+    debug: indicates if debug message are output (for debuging purpose)
+    sender: indicates who is sending the received message. 
+      In the case of a TLS client, the sender is set to 'server'
+  """
   def __init__( self, socket, debug=None, sender='server' ) :
     """ converts received bytes into TLS messages
 
@@ -237,22 +258,25 @@ class TLSByteStreamParser:
     return int.from_bytes( self.byte_stream[ 3 : 5 ] , byteorder="big") + 5
 
   def fragment_reassembly( self, plain_text:TLSMsg=None )-> TLSMsg:
-    """ returns the first tls (handshake) message from a TLS plaintext
-        fragment or a TLSMsg with its content set to None.
+    """ returns the first TLS message
+
+    returns the first tls (handshake) message from a TLS plaintext
+    fragment or a TLSMsg with its content set to None.
 
     Returning such message MAY require reassembling fragments.
     Note that the fragment MAY also contain other TLS messages
     when multiple handshake messages are pipelined.
 
-    args:
-      plain_text which contains the :
-        plain_text_fragment_type corresponds to the TLSPlaintext
+    Args:
+      plain_text: The plain text message which contains:
+
+        1. plain_text_fragment_type corresponds to the TLSPlaintext
           'type'. It is extracted from the TLS reccord or the
           InnerPlaintext. It can be 'change_cipher', 'alert',
           'handshake' or 'application_data' but in our case,
           it MUST be set to 'handshake' as fragmentation only
           happens for handshake messages.
-        plain_text_fragment (bytes): the actual bytes of the fragment.
+        2. plain_text_fragment (bytes): the actual bytes of the fragment.
           current_fragment corresponds to the ongoing fragments
           being reassembled.
 
@@ -266,15 +290,18 @@ class TLSByteStreamParser:
     The case that is of interest to use is the case of
     handshake message that can be fragmented.
 
-    TLSPlaintext = Struct(
-      'type' / ContentType,
-      'legacy_record_version' /  Const( b'\x03\x03' ),
-      'fragment' / Prefixed( BytesInteger(2), Switch( this.type,
-         { 'change_cipher_spec' : ChangeCipherSpec,
-           'alert' : Alert,
-           'handshake' : GreedyBytes,
-           'application_data' : GreedyBytes } ) )
-    )
+    .. code-block:: python
+
+      TLSPlaintext = Struct(
+        'type' / ContentType,
+        'legacy_record_version' /  Const( b'\x03\x03' ),
+        'fragment' / Prefixed( BytesInteger(2), Switch( this.type,
+           { 'change_cipher_spec' : ChangeCipherSpec,
+             'alert' : Alert,
+             'handshake' : GreedyBytes,
+             'application_data' : GreedyBytes } ) )
+      )
+
 
     The function only takes the bytes associated to the fragment
     as these fragment may be carried inside a TLSPlaintext message
@@ -289,18 +316,28 @@ class TLSByteStreamParser:
 
     A fragment will not make possible the parsing.
     Fragments can be :
-    1) a starting initial fragment:
-      type: handshake
-      legacy_reccord_version: \x03\x03
-      fragment: <chunk of a large handshake_message>
-    2) a non starting initial fragment:
-      type: handshake
-      legacy_reccord_version: \x03\x03
-      fragment:  handshake message || <chunk of a large handshake_message>
+    1. a starting initial fragment:
+
+      .. code block:: python
+
+        type: handshake
+        legacy_reccord_version: \x03\x03
+        fragment: <chunk of a large handshake_message>
+
+    2. a non starting initial fragment:
+
+      .. code block:: python
+
+        type: handshake
+        legacy_reccord_version: \x03\x03
+        fragment:  handshake message || <chunk of a large handshake_message>
     3) a non initial fragment
-      type: handshake
-      legacy_reccord_version: \x03\x03
-      fragment: <chunk of a large handshake_message>
+
+      .. code block:: python
+
+        type: handshake
+        legacy_reccord_version: \x03\x03
+        fragment: <chunk of a large handshake_message>
 
     With the current structure, 1) and 3) will generate an
     error upon parsing as the fragment will not be recognized
@@ -1015,7 +1052,9 @@ class Finished( ClientHello ):
 
 
 class CertificateVerify( TLSMsg ):
+
   def __init__( self, conf=None, content={}, sender=None ):
+
     TLSMsg.__init__( self, conf=conf, content_type='handshake', content=content, sender=sender )
     self.msg_type ='certificate_verify'
     self.c_client_finished = False
@@ -1023,6 +1062,7 @@ class CertificateVerify( TLSMsg ):
     self.debug =  pytls13.debug.Debug( self.conf[ 'debug' ] )
 
   def check_signature( self, tls_handshake, public_key ):
+
     signed_content = tls_handshake.certificate_verify_content( role=self.sender )
     signature = self.content[ 'data' ][ 'signature' ]
     algorithm = self.content[ 'data' ][ 'algorithm' ]
@@ -1047,10 +1087,12 @@ class CertificateVerify( TLSMsg ):
     """ returns the last_message tag
 
     last_exchange is set to False in the following cases:
-    1) post handshake: post_hand_auth_proposed  (post handshake)
-    2) session resumption: method is 'cs_generated' or PSK in use in CS
-       this corresponds to the value c_register_tickets
+
+    1. post handshake: post_hand_auth_proposed  (post handshake)
+    2. session resumption: method is 'cs_generated' or PSK in use in CS
+      this corresponds to the value c_register_tickets
     """
+
     return c_register_tickets or is_post_hand_auth_proposed
 
 
@@ -1085,6 +1127,7 @@ class CertificateVerify( TLSMsg ):
 
 
   def init_content_from_lurk_resp( self, lurk_resp ):
+
     try:
       algorithm = self.conf[ 'cs' ][ ( 'tls13', 'v1' ) ][ 'sig_scheme' ][ 0 ]
     except KeyError:
@@ -1158,8 +1201,10 @@ class CertificateVerify( TLSMsg ):
 
 
 class Certificate( TLSMsg ):
+  """Certificate Message handler for teh TLS client"""
 
   def __init__( self, conf=None, content={}, sender=None ):
+
     TLSMsg.__init__( self, conf=conf, content_type='handshake', content=content, sender=sender )
     self.msg_type ='certificate'
 
@@ -1182,6 +1227,11 @@ class Certificate( TLSMsg ):
 
 
   def get_public_key( self ):
+    """Returning the corresponding public key
+
+    Returns:
+      public_key: the public key object
+    """
 
     ## we shoudl reuse load_public_bytes from conf.
     public_bytes = self.content[ 'data' ][ 'certificate_list' ][ 0 ][ 'cert' ]
