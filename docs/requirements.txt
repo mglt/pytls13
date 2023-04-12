@@ -2,6 +2,5 @@ construct==2.10.68
 cryptography==3.4.8
 dnspython==2.3.0
 hkdf==0.0.3
-nacl==0.0.0
 pycryptodome==3.17
 pylurk==0.0.3
