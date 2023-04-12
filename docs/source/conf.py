@@ -18,9 +18,9 @@ release = '0.1'
 import os
 import sys
 ##sys.path.insert( 0, os.path.abspath( '../../../pylurk.git/src/pylurk/' ))
-##sys.path.insert( 0, os.path.abspath( '../../src/pytls13/' ))
-sys.path.insert( 0, os.path.abspath( '/home/mglt/gitlab/pytls13/src/pytls13' ))
-sys.path.insert( 0, os.path.abspath( '/home/mglt/gitlab/pytls13/src' ))
+sys.path.insert( 0, os.path.abspath( '../../src/pytls13/' ))
+#sys.path.insert( 0, os.path.abspath( '/home/mglt/gitlab/pytls13/src/pytls13' ))
+#sys.path.insert( 0, os.path.abspath( '/home/mglt/gitlab/pytls13/src' ))
 #sys.path.insert( 0, os.path.abspath( '/home/mglt/gitlab/pylurk.git/src' ))
 
 
