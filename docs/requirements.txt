@@ -4,4 +4,3 @@ dnspython==2.3.0
 hkdf==0.0.3
 pycryptodome==3.17
 pylurk==0.0.3
-pytls13==0.0.1
