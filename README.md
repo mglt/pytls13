@@ -33,10 +33,12 @@ Currently the cli scripts are not installed via pip3 package, so one need to ins
 
 The simple installation is as follows:
 1. Install `pytls13` and `pylurk` from the git repo.
-  ```
-   `git clone https://github.com/mglt/pytls13.git`
-   `git clone https://github.com/mglt/pylurk.git tls13`. Note that for a very limited usage pip3 pylurk maybe sufficient. 
-3. Update in `tls_client`, in pytls13.git/example/cli`
+```
+ `git clone https://github.com/mglt/pytls13.git`
+ `git clone https://github.com/mglt/pylurk.git tls13`. 
+```
+Note that for a very limited usage pip3 pylurk maybe sufficient. 
+2. In `pytls13.git/example/cli`, update in `tls_client`, in pytls13.git/example/cli`
   * `CS_GRAMINE_DIR`: the location of the `pylurk.git/example/cli` directory
   * `GRAMINE_DIR` the directory of the Gramine directory
   * The path of the `pylurk` and `pytls13` modules indicated by the `sys.path.insert` directive.

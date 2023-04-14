@@ -21,14 +21,18 @@ import os
 import sys
 ## sys.path.insert( 0, os.path.abspath( '../../../pylurk.git/src/pylurk/' ))
 ## relative path for RTD
+### LOCAL CONFIGURATION
 sys.path.insert( 0, os.path.abspath( '../../../src' ))
 sys.path.insert( 0, os.path.abspath( '../../../src/pytls13' ))
 ## when locally generated via make html
 ## providing the pytls13 directory enables autodoc to find the modules. 
 ## it seems that pytls13.module is not consider properly
 ## maybe that could be also resolved by adding __init__ in our package.
+### RTD CONFIGURATION
 sys.path.insert( 0, os.path.abspath( '../../src' ))
 sys.path.insert( 0, os.path.abspath( '../../src/pytls13' ))
+
+### TO BE REMOVED
 #sys.path.insert( 0, os.path.abspath( '/home/mglt/gitlab/pytls13/src/pytls13' ))
 #sys.path.insert( 0, os.path.abspath( '/home/mglt/gitlab/pytls13/src' ))
 #sys.path.insert( 0, os.path.abspath( '/home/mglt/gitlab/pylurk.git/src' ))
